@@ -4,7 +4,6 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from '../trpc';
 import path from 'path';
 import { createContext } from '../trpc/context';
-import { db } from '../db';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -27,18 +26,30 @@ app.get('/api/health', (req, res) => {
 });
 
 // Serve static files from the client build directory
-app.use(express.static(path.join(process.cwd(), 'client/dist')));
+// Note: On Vercel, the path might be different, so we use a more robust way
+const distPath = path.join(process.cwd(), 'dist/client');
+app.use(express.static(distPath));
 
 // Fallback route for React Router (must be after TRPC and static files)
 app.get('*', (req, res) => {
-  res.sendFile(path.join(process.cwd(), 'client/dist', 'index.html'));
+  // If it's an API request that wasn't caught, return 404
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API route not found' });
+  }
+  // Otherwise, serve the index.html for the frontend
+  res.sendFile(path.join(distPath, 'index.html'), (err) => {
+    if (err) {
+      res.status(500).send('Frontend build not found. Please run build first.');
+    }
+  });
 });
 
 // Start the server
-app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
-  console.log('Database connection established.');
-});
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`Server listening at http://localhost:${port}`);
+  });
+}
 
-// Export app for testing purposes
+// Export app for Vercel
 export default app;
