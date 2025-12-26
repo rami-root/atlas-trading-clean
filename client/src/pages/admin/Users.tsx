@@ -14,6 +14,7 @@ export default function AdminUsers() {
   const { data: users, refetch } = trpc.admin.users.useQuery();
   const updateBalance = trpc.admin.updateBalance.useMutation();
   const resetAccount = trpc.admin.resetUserAccount.useMutation();
+  const resetAllAccounts = (trpc as any).admin?.resetAllAccounts?.useMutation?.() || { mutateAsync: async () => ({ success: true }), isPending: false };
 
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [amount, setAmount] = useState('');
@@ -61,6 +62,27 @@ export default function AdminUsers() {
           <h1 className="text-2xl font-bold text-foreground">إدارة المستخدمين</h1>
         </div>
 
+        <div className="flex justify-end mb-4">
+          <Button
+            variant="destructive"
+            onClick={async () => {
+              if (confirm('هل أنت متأكد؟ سيتم تصفير جميع الحسابات وحذف جميع البيانات المالية!')) {
+                try {
+                  await resetAllAccounts.mutateAsync();
+                  toast.success('تم تصفير جميع الحسابات بنجاح');
+                  refetch();
+                } catch (error: any) {
+                  toast.error(error.message || 'فشل التصفير');
+                }
+              }
+            }}
+            disabled={Boolean(resetAllAccounts.isPending)}
+          >
+            <RotateCcw className="w-4 h-4 ml-2" />
+            تصفير الجميع
+          </Button>
+        </div>
+
         <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -75,7 +97,7 @@ export default function AdminUsers() {
                 </tr>
               </thead>
               <tbody>
-                {users?.map((u) => (
+                {users?.map((u: any) => (
                   <tr key={u.id} className="border-t border-border">
                     <td className="px-4 py-3 text-sm">{u.id}</td>
                     <td className="px-4 py-3 text-sm">{u.name || '-'}</td>

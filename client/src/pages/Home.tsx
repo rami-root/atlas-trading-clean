@@ -34,7 +34,6 @@ export default function Home() {
   const { data: prices, refetch } = trpc.crypto.prices.useQuery();
   const { data: capital } = trpc.capital.getCapital.useQuery({ userId: 'mock_user_1' });
   const [showBalance, setShowBalance] = useState(true);
-  const [currentImage, setCurrentImage] = useState(0);
 
   // تحديث الأسعار كل 10 ثوانٍ
   useEffect(() => {
@@ -46,15 +45,9 @@ export default function Home() {
 
   const totalBalance = capital ? capital.available : 0;
 
-  const images = [
-    "/btc-neon.png",
-    "/atlas-crypto-banner.png",
-    "/btc-gold.png"
-  ];
+  const baseUrl = import.meta.env.BASE_URL || '/';
 
-  const handleImageClick = () => {
-    setCurrentImage((prev) => (prev + 1) % images.length);
-  };
+  const bannerImage = `${baseUrl}btc-neon.png`;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -121,19 +114,25 @@ export default function Home() {
         </div>
 
         {/* بانر ATLAS */}
-        <div onClick={handleImageClick} className="relative mb-8 overflow-hidden rounded-2xl shadow-xl cursor-pointer">
-          <img src={images[currentImage]} alt="Banner" className="w-full h-auto object-cover" />
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-            {images.map((_, index) => (
-              <div key={index} className={`h-1.5 rounded-full transition-all ${currentImage === index ? 'bg-white w-4' : 'bg-white/50 w-1.5'}`} />
-            ))}
-          </div>
+        <div className="relative mb-8 overflow-hidden rounded-2xl shadow-xl">
+          <img
+            src={bannerImage}
+            alt="Banner"
+            className="block w-full h-auto object-cover"
+            loading="eager"
+            decoding="async"
+            onError={(e) => {
+              // Prevent infinite onError loop (causes flicker) if the fallback also fails
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = `${baseUrl}btc-neon.png`;
+            }}
+          />
         </div>
 
         {/* قائمة العملات */}
         <div className="space-y-3">
           <h3 className="text-lg font-semibold text-foreground mb-4">الأسعار المباشرة</h3>
-          {prices?.slice(0, 6).map((crypto) => (
+          {prices?.map((crypto: any) => (
             <div
               key={crypto.symbol}
               className="flex items-center justify-between p-4 bg-card border border-border rounded-xl cursor-pointer hover:bg-accent/50 transition-colors"

@@ -14,25 +14,77 @@ export default function TradingDetail() {
   const searchParams = new URLSearchParams(window.location.search);
   const symbolParam = searchParams.get('symbol') || 'BTC';
   
-  const [selectedSymbol] = useState(symbolParam);
-  const [tradeType, setTradeType] = useState<'call' | 'put'>('call');
-  const [duration, setDuration] = useState(60);
+  const [selectedSymbol, setSelectedSymbol] = useState(symbolParam);
+  const [tradeType, setTradeType] = useState<'call' | 'put' | null>(null);
+  const [duration, setDuration] = useState<number | null>(null);
   const [amount, setAmount] = useState('');
+  const [didAutofill, setDidAutofill] = useState(false);
   
   // استخدام الراوتر الجديد crypto
   const { data: price, refetch } = trpc.crypto.price.useQuery({ symbol: selectedSymbol });
   // استخدام الراوتر capital بدلاً من wallet المفقود
   const { data: capital } = trpc.capital.getCapital.useQuery({ userId: 'mock_user_1' });
+  const { data: directed } = (trpc as any).admin?.getTradingSettings?.useQuery?.() || { data: null };
   
   // ملاحظة: راوتر trading قد يحتاج لإضافة لاحقاً إذا كان مفقوداً، حالياً سنبقي الكود لعدم كسر الواجهة
   const createContract = (trpc as any).trading?.createContract?.useMutation() || { mutateAsync: async () => {}, isPending: false };
 
   useEffect(() => {
-    if (capital?.feeding) {
+    // If directed trading is active and the user selected a non-matching pair,
+    // do not preselect duration/type (no assistance).
+    if (!directed || directed.isActive !== 1) return;
+    const allowedPair = String(directed.allowedSymbol ?? '').trim().toUpperCase();
+    const selectedRaw = String(selectedSymbol ?? '').trim().toUpperCase();
+    const selectedPair = selectedRaw.includes('/') ? selectedRaw : `${selectedRaw}/USDT`;
+    if (allowedPair && allowedPair !== selectedPair) {
+      setTradeType(null);
+      setDuration(null);
+    }
+  }, [directed, selectedSymbol]);
+
+  useEffect(() => {
+    if (!capital?.feeding) return;
+
+    const allowedSymbol = String(directed?.allowedSymbol ?? '');
+    const allowedPair = allowedSymbol.trim().toUpperCase();
+    const selectedRaw = String(selectedSymbol ?? '').trim().toUpperCase();
+    const selectedPair = selectedRaw.includes('/') ? selectedRaw : `${selectedRaw}/USDT`;
+    const isDirectedActive = directed?.isActive === 1;
+    const isSymbolMatch = !allowedPair || allowedPair === selectedPair;
+
+    // Default: stake is 15% of feeding
+    // If directed trading is active and user chose a different currency, do not help/autofill.
+    if (!didAutofill && (!isDirectedActive || isSymbolMatch)) {
       const autoAmount = (capital.feeding * 0.15).toFixed(2);
       setAmount(autoAmount);
     }
-  }, [capital]);
+  }, [capital, didAutofill, directed, selectedSymbol]);
+
+  useEffect(() => {
+    // Auto-apply directed trading settings for the user (no warnings, still editable)
+    if (didAutofill) return;
+    if (!directed) return;
+    if (directed.isActive !== 1) return;
+
+    const allowedSymbol = String(directed.allowedSymbol ?? '');
+    const allowedPair = allowedSymbol.trim().toUpperCase();
+    const selectedRaw = String(selectedSymbol ?? '').trim().toUpperCase();
+    const selectedPair = selectedRaw.includes('/') ? selectedRaw : `${selectedRaw}/USDT`;
+    // If user selected a different currency, do not help/autofill.
+    if (!allowedPair || allowedPair !== selectedPair) return;
+
+    // Do not force the symbol for the user. If the user chooses a different currency,
+    // we keep it as-is and let compliance rules decide.
+    if (directed.allowedType) setTradeType(directed.allowedType);
+    if (directed.allowedDuration) setDuration(Number(directed.allowedDuration));
+
+    // Keep stake at 15% of feeding
+    if (capital?.feeding) {
+      setAmount((capital.feeding * 0.15).toFixed(2));
+    }
+
+    setDidAutofill(true);
+  }, [directed, capital, didAutofill, selectedSymbol]);
   
   useEffect(() => {
     const interval = setInterval(() => {
@@ -48,6 +100,14 @@ export default function TradingDetail() {
   ];
 
   const handleTrade = async () => {
+    if (!tradeType) {
+      toast.error('اختر نوع الصفقة (Call / Put)');
+      return;
+    }
+    if (!duration) {
+      toast.error('اختر المدة');
+      return;
+    }
     if (!amount || parseFloat(amount) <= 0) {
       toast.error('الرجاء إدخال مبلغ صحيح');
       return;
@@ -166,9 +226,6 @@ export default function TradingDetail() {
             className="text-base"
           />
           <div className="flex justify-between items-center mt-2 text-xs">
-            <span className="text-muted-foreground">
-              المتاح: {capital?.available.toLocaleString() || '0'}
-            </span>
             <span className="text-primary font-medium">
               الربح المتوقع: +{potentialProfit} USDT
             </span>
@@ -177,7 +234,7 @@ export default function TradingDetail() {
 
         <Button
           onClick={handleTrade}
-          disabled={createContract.isPending || !amount || parseFloat(amount) <= 0}
+          disabled={createContract.isPending || !tradeType || !duration || !amount || parseFloat(amount) <= 0}
           className={`w-full py-5 text-base ${
             tradeType === 'call'
               ? 'bg-green-500 hover:bg-green-600'

@@ -13,6 +13,7 @@ export default defineConfig({
   },
   // Set root to project root because index.html is there
   root: './',
+  publicDir: 'client/public',
   build: {
     outDir: 'dist/client', // Output to dist/client in the root
     emptyOutDir: true,

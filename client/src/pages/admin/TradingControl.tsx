@@ -54,6 +54,8 @@ export default function AdminTradingControl() {
   const [profitPercentage, setProfitPercentage] = useState("3.00");
   const [isActive, setIsActive] = useState(true);
   const [tradingMode, setTradingMode] = useState<"classic" | "normal">("classic");
+  const [dailyWinLimitEnabled, setDailyWinLimitEnabled] = useState(false);
+  const [maxWinsPerDay, setMaxWinsPerDay] = useState(1);
 
   const { data: settings, refetch } = trpc.admin.getTradingSettings.useQuery();
   const updateSettings = trpc.admin.updateTradingSettings.useMutation();
@@ -66,6 +68,8 @@ export default function AdminTradingControl() {
       setProfitPercentage(settings.profitPercentage);
       setIsActive(settings.isActive === 1);
       setTradingMode((settings.tradingMode as "classic" | "normal") || "classic");
+      setDailyWinLimitEnabled((settings as any).dailyWinLimitEnabled === 1);
+      setMaxWinsPerDay(Math.max(1, Number((settings as any).maxWinsPerDay ?? 1)));
     }
   }, [settings]);
 
@@ -90,6 +94,8 @@ export default function AdminTradingControl() {
         profitPercentage,
         isActive: isActive ? 1 : 0,
         tradingMode,
+        dailyWinLimitEnabled: dailyWinLimitEnabled ? 1 : 0,
+        maxWinsPerDay,
       });
       toast.success("تم حفظ إعدادات التداول بنجاح");
       refetch();
@@ -146,6 +152,11 @@ export default function AdminTradingControl() {
               <div className="text-2xl font-bold text-green-500">
                 {profitPercentage || "3"}%
               </div>
+            </div>
+          </div>
+          <div className="mt-4 text-center">
+            <div className="text-sm text-muted-foreground">
+              حد الربح اليومي: {dailyWinLimitEnabled ? `${maxWinsPerDay} صفقة ربح/يوم` : "غير مفعّل"}
             </div>
           </div>
           <div className="mt-4 text-center">
@@ -311,6 +322,40 @@ export default function AdminTradingControl() {
                   ? "الوضع الكلاسيكي: الربح دائماً 3% من مبلغ الإيداع الأصلي (initialDeposit)"
                   : "الوضع العادي: الربح حسب نسبة المدة (30%, 35%, 45%)"}
               </p>
+            </div>
+
+            {/* حد الربح اليومي */}
+            <div className="bg-card border border-border rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold">حد الربح اليومي</div>
+                  <div className="text-sm text-muted-foreground">
+                    منع المستخدم من الربح أكثر من عدد صفقات محدد في اليوم
+                  </div>
+                </div>
+                <Button
+                  variant={dailyWinLimitEnabled ? "destructive" : "default"}
+                  onClick={() => setDailyWinLimitEnabled(!dailyWinLimitEnabled)}
+                >
+                  {dailyWinLimitEnabled ? "تعطيل" : "تفعيل"}
+                </Button>
+              </div>
+
+              <div className="mt-4">
+                <Label htmlFor="maxWins" className="text-base font-semibold mb-2 block">
+                  عدد مرات الربح باليوم
+                </Label>
+                <Input
+                  id="maxWins"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={maxWinsPerDay}
+                  onChange={(e) => setMaxWinsPerDay(Math.max(1, parseInt(e.target.value || '1', 10)))}
+                  className="text-lg"
+                  disabled={!dailyWinLimitEnabled}
+                />
+              </div>
             </div>
 
             {/* تفعيل/تعطيل النظام */}

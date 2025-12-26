@@ -5,9 +5,63 @@ import { appRouter } from '../trpc';
 import path from 'path';
 import { createContext } from '../trpc/context';
 import { runMigrations } from '../db/migrate';
+import fs from 'fs';
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+const SETTINGS_DIR = path.join(process.cwd(), 'data');
+const SETTINGS_FILE = path.join(SETTINGS_DIR, 'trading-settings.json');
+
+type TradingSettings = {
+  allowedSymbol: string;
+  allowedDuration: number;
+  allowedType: 'call' | 'put';
+  profitPercentage: string;
+  isActive: 0 | 1;
+  tradingMode: 'classic' | 'normal';
+  dailyWinLimitEnabled: 0 | 1;
+  maxWinsPerDay: number;
+};
+
+const defaultTradingSettings: TradingSettings = {
+  allowedSymbol: 'BTC/USDT',
+  allowedDuration: 60,
+  allowedType: 'call',
+  profitPercentage: '3.00',
+  isActive: 1,
+  tradingMode: 'classic',
+  dailyWinLimitEnabled: 0,
+  maxWinsPerDay: 1,
+};
+
+const ensureSettingsDir = () => {
+  try {
+    fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+  } catch {
+    // ignore
+  }
+};
+
+const readTradingSettings = (): TradingSettings => {
+  ensureSettingsDir();
+  try {
+    if (!fs.existsSync(SETTINGS_FILE)) return defaultTradingSettings;
+    const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
+    const parsed = JSON.parse(raw) as Partial<TradingSettings>;
+    return {
+      ...defaultTradingSettings,
+      ...parsed,
+    };
+  } catch {
+    return defaultTradingSettings;
+  }
+};
+
+const writeTradingSettings = (settings: TradingSettings) => {
+  ensureSettingsDir();
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+};
 
 // Middleware for JSON parsing
 app.use(express.json());
@@ -37,6 +91,33 @@ app.use(
     createContext,
   })
 );
+
+app.get('/api/admin/trading-settings', (req, res) => {
+  const settings = readTradingSettings();
+  res.status(200).json(settings);
+});
+
+app.put('/api/admin/trading-settings', (req, res) => {
+  const body = req.body as Partial<TradingSettings>;
+  const next: TradingSettings = {
+    ...defaultTradingSettings,
+    ...body,
+    allowedSymbol: String(body.allowedSymbol ?? defaultTradingSettings.allowedSymbol),
+    allowedDuration: Number(body.allowedDuration ?? defaultTradingSettings.allowedDuration),
+    allowedType: (body.allowedType ?? defaultTradingSettings.allowedType) as 'call' | 'put',
+    profitPercentage: String(body.profitPercentage ?? defaultTradingSettings.profitPercentage),
+    isActive: (body.isActive ?? defaultTradingSettings.isActive) as 0 | 1,
+    tradingMode: (body.tradingMode ?? defaultTradingSettings.tradingMode) as 'classic' | 'normal',
+    dailyWinLimitEnabled: (body.dailyWinLimitEnabled ?? defaultTradingSettings.dailyWinLimitEnabled) as 0 | 1,
+    maxWinsPerDay: Number(body.maxWinsPerDay ?? defaultTradingSettings.maxWinsPerDay),
+  };
+  try {
+    writeTradingSettings(next);
+    res.status(200).json({ success: true, settings: next });
+  } catch {
+    res.status(500).json({ success: false });
+  }
+});
 
 // Basic health check endpoint
 app.get('/api/health', (req, res) => {

@@ -1,0 +1,31 @@
+node_modules/
+
+# build outputs
+dist/
+
+# runtime persistent data (server writes here)
+data/
+
+# local databases
+sqlite.db
+*.sqlite
+*.db
+
+# environment files
+.env
+.env.*
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# editor/OS
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Vite cache
+.vite/

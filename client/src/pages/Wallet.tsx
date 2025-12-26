@@ -47,17 +47,11 @@ export default function Wallet() {
               {parseFloat(wallet?.totalBalance || '0').toFixed(2)} USDT
             </div>
             
-            <div className="grid grid-cols-3 gap-3 mt-4 text-center">
+            <div className="grid grid-cols-2 gap-3 mt-4 text-center">
               <div className="bg-background/50 rounded-lg p-3">
                 <div className="text-xs text-muted-foreground mb-1">إجمالي التغذية</div>
                 <div className="text-sm font-semibold text-blue-500">
-                  {parseFloat(wallet?.totalDeposits || '0').toFixed(2)}
-                </div>
-              </div>
-              <div className="bg-background/50 rounded-lg p-3">
-                <div className="text-xs text-muted-foreground mb-1">الانسحاب الكلي</div>
-                <div className="text-sm font-semibold text-orange-500">
-                  {parseFloat(wallet?.totalWithdrawals || '0').toFixed(2)}
+                  {parseFloat((wallet as any)?.feedingBalance || wallet?.totalDeposits || '0').toFixed(2)}
                 </div>
               </div>
               <div className="bg-background/50 rounded-lg p-3">
@@ -68,20 +62,7 @@ export default function Wallet() {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div>
-                <div className="text-xs text-muted-foreground">المتاح</div>
-                <div className="text-lg font-semibold text-green-500">
-                  {parseFloat(wallet?.availableBalance || '0').toFixed(2)}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">المقفل</div>
-                <div className="text-lg font-semibold text-yellow-500">
-                  {parseFloat(wallet?.lockedBalance || '0').toFixed(2)}
-                </div>
-              </div>
-            </div>
+            <div className="grid grid-cols-1 gap-4 mt-4" />
           </div>
         </div>
 
@@ -113,7 +94,7 @@ export default function Wallet() {
           
           {transactions && transactions.length > 0 ? (
             <div className="space-y-3">
-              {transactions.map((tx) => (
+              {transactions.map((tx: any) => (
                 <div
                   key={tx.id}
                   className="bg-card border border-border rounded-lg p-4"

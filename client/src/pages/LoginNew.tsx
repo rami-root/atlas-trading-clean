@@ -29,14 +29,17 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!email || !password) {
+    const emailValue = email.trim();
+    const passwordValue = password;
+
+    if (!emailValue || !passwordValue) {
       toast.error('الرجاء إدخال البريد الإلكتروني وكلمة المرور');
       return;
     }
 
     setLoading(true);
     try {
-      await login(email, password);
+      await login(emailValue, passwordValue);
       
       // حفظ أو حذف معلومات التسجيل بناءً على خيار "تذكرني"
       if (rememberMe) {
@@ -52,7 +55,7 @@ export default function Login() {
       // الانتقال إلى الصفحة الرئيسية
       setLocation('/');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'حدث خطأ أثناء تسجيل الدخول');
+      toast.error(error?.response?.data?.error || error?.message || 'حدث خطأ أثناء تسجيل الدخول');
     } finally {
       setLoading(false);
     }
@@ -64,9 +67,12 @@ export default function Login() {
         {/* الشعار */}
         <div className="text-center mb-8">
           <img 
-            src="/atlas-hero.png" 
+            src="/btc-neon.png" 
             alt="Atlas" 
             className="w-full max-w-sm mx-auto mb-4"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
           />
           <h1 className="text-2xl font-bold text-foreground">تسجيل الدخول</h1>
           <p className="text-sm text-muted-foreground mt-2">
@@ -79,11 +85,11 @@ export default function Login() {
           {/* البريد الإلكتروني */}
           <div>
             <label className="text-sm font-medium text-foreground block mb-2">
-              البريد الإلكتروني
+              البريد الإلكتروني أو اسم المستخدم
             </label>
             <Input
-              type="email"
-              placeholder="example@email.com"
+              type="text"
+              placeholder="admin@example.com أو admin"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
