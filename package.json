@@ -4,10 +4,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "concurrently \"vite --config vite.config.ts\" \"NODE_ENV=development tsx watch server/_core/index.ts\"",
-    "build": "vite build --config vite.config.ts && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --out-extension:.js=.mjs",
-    "vercel-build": "npm run build",
-    "start": "NODE_ENV=production node dist/index.mjs",
+    "dev": "vite --config vite.config.ts",
+    "build": "vite build --config vite.config.ts",
+    "preview": "vite preview",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",

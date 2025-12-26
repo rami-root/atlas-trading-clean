@@ -1,4 +1,5 @@
-import { createTRPCReact } from "@trpc/react-query";
-import type { AppRouter } from "../../../server/routers";
+// Supabase-based adapter that mimics tRPC interface
+// This allows all pages to work without modification
+import { trpcAdapter } from './trpc-adapter';
 
-export const trpc = createTRPCReact<AppRouter>();
+export const trpc = trpcAdapter as any;
