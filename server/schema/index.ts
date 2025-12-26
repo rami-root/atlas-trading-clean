@@ -1,19 +1,18 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { pgTable, text, integer, real, timestamp, boolean } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Users Table
-export const users = sqliteTable('users', {
-  // SQLite does not support auto-increment on text primary keys easily, so we'll use a simple text ID.
+export const users = pgTable('users', {
   id: text('id').primaryKey(), 
   username: text('username').notNull().unique(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp('created_at').defaultNow(),
 });
 
 // Capital Management Table (لتطبيق منطق التغذية والأرباح)
-export const capital = sqliteTable('capital', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const capital = pgTable('capital', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   userId: text('user_id').notNull().references(() => users.id),
   // التغذية: رأس المال الأصلي (لا تُمس إلا بالخصم العقابي)
   funding: real('funding').notNull().default(0.00),
@@ -21,16 +20,16 @@ export const capital = sqliteTable('capital', {
   profitBuffer: real('profit_buffer').notNull().default(0.00),
   // المتاح: funding + profitBuffer
   availableCapital: real('available_capital').notNull().default(0.00),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // Transactions/Trades Table (لتسجيل الصفقات)
-export const transactions = sqliteTable('transactions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const transactions = pgTable('transactions', {
+  id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
   userId: text('user_id').notNull().references(() => users.id),
   type: text('type').notNull(), // e.g., 'deposit', 'withdrawal', 'trade'
   amount: real('amount').notNull(),
-  isCompliant: integer('is_compliant', { mode: 'boolean' }).notNull().default(1), // 1 = ملتزم (Compliant), 0 = مخالف (Non-compliant)
+  isCompliant: boolean('is_compliant').notNull().default(true), // true = ملتزم (Compliant), false = مخالف (Non-compliant)
   description: text('description'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp('created_at').defaultNow(),
 });
