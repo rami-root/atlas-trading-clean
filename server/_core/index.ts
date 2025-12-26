@@ -10,8 +10,13 @@ import fs from 'fs';
 const app = express();
 const port = process.env.PORT || 3000;
 
-const SETTINGS_DIR = path.join(process.cwd(), 'data');
-const SETTINGS_FILE = path.join(SETTINGS_DIR, 'trading-settings.json');
+const SETTINGS_DIR = process.env.SETTINGS_DIR
+  ? path.resolve(process.env.SETTINGS_DIR)
+  : path.join(process.cwd(), 'data');
+
+const SETTINGS_FILE = process.env.SETTINGS_FILE
+  ? path.resolve(process.env.SETTINGS_FILE)
+  : path.join(SETTINGS_DIR, 'trading-settings.json');
 
 type TradingSettings = {
   allowedSymbol: string;
@@ -37,7 +42,7 @@ const defaultTradingSettings: TradingSettings = {
 
 const ensureSettingsDir = () => {
   try {
-    fs.mkdirSync(SETTINGS_DIR, { recursive: true });
+    fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
   } catch {
     // ignore
   }
