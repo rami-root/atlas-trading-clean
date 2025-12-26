@@ -11,11 +11,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './client/src'),
     },
   },
-  // Ensure the base directory is set correctly for the client build
-  root: './client',
+  // Set root to project root because index.html is there
+  root: './',
   build: {
-    outDir: '../dist/client', // Output to dist/client in the root
+    outDir: 'dist/client', // Output to dist/client in the root
     emptyOutDir: true,
   },
-  // Remove server.historyApiFallback as it's not needed for production build
 });
