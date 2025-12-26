@@ -2,22 +2,22 @@
   "version": 2,
   "builds": [
     {
-      "src": "server/_core/index.ts",
+      "src": "dist/index.mjs",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/trpc/(.*)",
-      "dest": "server/_core/index.ts"
+      "dest": "dist/index.mjs"
     },
     {
       "src": "/api/(.*)",
-      "dest": "server/_core/index.ts"
+      "dest": "dist/index.mjs"
     },
     {
       "src": "/(.*)",
-      "dest": "server/_core/index.ts"
+      "dest": "dist/index.mjs"
     }
   ]
 }
