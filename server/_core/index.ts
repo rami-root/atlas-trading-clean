@@ -4,12 +4,30 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from '../trpc';
 import path from 'path';
 import { createContext } from '../trpc/context';
+import { runMigrations } from '../db/migrate';
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware for JSON parsing
 app.use(express.json());
+
+// Initialize database migrations on startup
+let migrationsRun = false;
+const initializeDatabase = async () => {
+  if (!migrationsRun) {
+    try {
+      await runMigrations();
+      migrationsRun = true;
+    } catch (error) {
+      console.error('Failed to run migrations:', error);
+      // Don't crash the server, just log the error
+    }
+  }
+};
+
+// Run migrations before starting the server
+initializeDatabase().catch(console.error);
 
 // TRPC Middleware
 app.use(
