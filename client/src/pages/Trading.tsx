@@ -5,7 +5,7 @@ import BottomNav from "@/components/BottomNav";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { useLocation } from "wouter";
 
-// دالة للحصول على أيقونة العملة من CoinGecko API (خفيفة جداً - 32x32px)
+// دالة للحصول على أيقونة العملة من CoinGecko
 const getCryptoIcon = (symbol: string) => {
   const coinMap: Record<string, string> = {
     'BTC': 'bitcoin',
@@ -25,17 +25,21 @@ const getCryptoIcon = (symbol: string) => {
     'UNI': 'uniswap',
     'ATOM': 'cosmos',
     'XLM': 'stellar',
-    'ETC': 'ethereum-classic',
-    'BCH': 'bitcoin-cash',
     'TRX': 'tron',
-    'EOS': 'eos',
-    'IOTA': 'iota',
   };
   
-  const coinSymbol = symbol.split('/')[0];
-  const coinId = coinMap[coinSymbol] || coinSymbol.toLowerCase();
-  // استخدام رابط CoinGecko الصحيح مع أرقام الأيقونات
-  const iconIds: Record<string, number> = {
+  const coinSymbol = symbol.split('/')[0].toUpperCase();
+  const coinId = coinMap[coinSymbol];
+  
+  if (coinId) {
+    return `https://assets.coingecko.com/coins/images/${getIconId(coinId)}/small/${coinId}.png`;
+  }
+  return `https://ui-avatars.com/api/?name=${coinSymbol}&background=random&color=fff`;
+};
+
+// دالة مساعدة للحصول على معرف الصورة الصحيح من CoinGecko
+const getIconId = (coinId: string): number => {
+  const ids: Record<string, number> = {
     'bitcoin': 1,
     'ethereum': 279,
     'tether': 325,
@@ -53,90 +57,83 @@ const getCryptoIcon = (symbol: string) => {
     'uniswap': 12504,
     'cosmos': 3794,
     'stellar': 100,
-    'ethereum-classic': 3,
-    'bitcoin-cash': 1,
     'tron': 1094,
-    'eos': 1765,
-    'iota': 1720,
   };
-  const iconId = iconIds[coinId];
-  if (iconId) {
-    return `https://assets.coingecko.com/coins/images/${iconId}/small/${coinId}.png`;
-  }
-  return `https://assets.coingecko.com/coins/images/1/small/bitcoin.png`; // fallback
+  return ids[coinId] || 1;
 };
 
 export default function Trading() {
   const [, setLocation] = useLocation();
-  const { data: prices, refetch } = trpc.crypto.prices.useQuery();
+  const { data: prices, refetch, isLoading } = trpc.crypto.prices.useQuery();
 
-  // تحديث الأسعار كل 3 ثوان
+  // تحديث الأسعار كل 10 ثوانٍ لتجنب حظر API
   useEffect(() => {
     const interval = setInterval(() => {
       refetch();
-    }, 3000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [refetch]);
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <Header title="المالي" subtitle="الأسعار المباشرة للعملات" />
+      <Header title="التداول" subtitle="الأسعار المباشرة للعملات" />
       
-      <div className="container max-w-lg mx-auto py-6">
-        {/* قائمة العملات */}
+      <div className="container max-w-lg mx-auto py-6 px-4">
         <div className="space-y-3">
           <h3 className="text-lg font-semibold text-foreground mb-4">
             جميع العملات الرقمية
           </h3>
           
-          {prices?.map((crypto) => (
-            <div
-              key={crypto.symbol}
-              className="crypto-card"
-              onClick={() => setLocation(`/trading-detail?symbol=${encodeURIComponent(crypto.symbol)}`)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-card border border-border flex items-center justify-center overflow-hidden">
-                    <img 
-                      src={getCryptoIcon(crypto.symbol)} 
-                      alt={crypto.name}
-                      className="w-7 h-7 object-contain"
-                      onError={(e) => {
-                        // في حالة فشل التحميل، استخدم أول حرفين
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.parentElement!.innerHTML = `<span class="text-sm font-bold text-primary">${crypto.name}</span>`;
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-foreground">
-                      {crypto.symbol}
+          {isLoading ? (
+            <div className="text-center py-10 text-muted-foreground">جاري تحميل الأسعار...</div>
+          ) : (
+            prices?.map((crypto) => (
+              <div
+                key={crypto.symbol}
+                className="bg-card border border-border p-4 rounded-xl cursor-pointer hover:bg-accent/50 transition-colors"
+                onClick={() => setLocation(`/trading-detail?symbol=${encodeURIComponent(crypto.symbol)}`)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-background border border-border flex items-center justify-center overflow-hidden">
+                      <img 
+                        src={getCryptoIcon(crypto.symbol)} 
+                        alt={crypto.name}
+                        className="w-7 h-7 object-contain"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://ui-avatars.com/api/?name=${crypto.symbol}&background=random`;
+                        }}
+                      />
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {crypto.name}
+                    <div>
+                      <div className="font-semibold text-foreground">
+                        {crypto.symbol}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {crypto.name}
+                      </div>
                     </div>
                   </div>
-                </div>
-                
-                <div className="text-left">
-                  <div className="font-bold text-foreground">
-                    ${crypto.price.toFixed(crypto.price < 1 ? 6 : 2)}
-                  </div>
-                  <div className={`flex items-center gap-1 text-sm ${
-                    crypto.change24h >= 0 ? 'price-up' : 'price-down'
-                  }`}>
-                    {crypto.change24h >= 0 ? (
-                      <TrendingUp className="w-4 h-4" />
-                    ) : (
-                      <TrendingDown className="w-4 h-4" />
-                    )}
-                    <span>{Math.abs(crypto.change24h).toFixed(2)}%</span>
+                  
+                  <div className="text-right">
+                    <div className="font-bold text-foreground">
+                      ${crypto.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+                    </div>
+                    <div className={`flex items-center justify-end gap-1 text-sm ${
+                      crypto.change24h >= 0 ? 'text-green-500' : 'text-red-500'
+                    }`}>
+                      {crypto.change24h >= 0 ? (
+                        <TrendingUp className="w-4 h-4" />
+                      ) : (
+                        <TrendingDown className="w-4 h-4" />
+                      )}
+                      <span>{Math.abs(crypto.change24h).toFixed(2)}%</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 

@@ -1,20 +1,13 @@
-import { router, publicProcedure } from './trpc';
-import { createContext } from './context';
+import { router } from './trpc';
 import { userRouter } from '../routers/user';
-import { capitalRouter } from '../routers/capital'; // New router for capital logic
-
-
-
-
-
-
-
+import { capitalRouter } from '../routers/capital';
+import { cryptoRouter } from '../routers/crypto';
 
 // Define the main application router
 export const appRouter = router({
   user: userRouter,
-  capital: capitalRouter, // Include the new capital router
-  // Add other routers here (e.g., trading, investments)
+  capital: capitalRouter,
+  crypto: cryptoRouter, // تم إضافة راوتر العملات هنا
 });
 
 // Export type for the app router
