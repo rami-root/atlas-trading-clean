@@ -5,18 +5,11 @@ import { appRouter } from '../trpc';
 import path from 'path';
 import { createContext } from '../trpc/context';
 import { runMigrations } from '../db/migrate';
-import fs from 'fs';
+import { db } from '../db';
+import { sql } from 'drizzle-orm';
 
 const app = express();
 const port = process.env.PORT || 3000;
-
-const SETTINGS_DIR = process.env.SETTINGS_DIR
-  ? path.resolve(process.env.SETTINGS_DIR)
-  : path.join(process.cwd(), 'data');
-
-const SETTINGS_FILE = process.env.SETTINGS_FILE
-  ? path.resolve(process.env.SETTINGS_FILE)
-  : path.join(SETTINGS_DIR, 'trading-settings.json');
 
 type TradingSettings = {
   allowedSymbol: string;
@@ -40,32 +33,80 @@ const defaultTradingSettings: TradingSettings = {
   maxWinsPerDay: 1,
 };
 
-const ensureSettingsDir = () => {
+const readTradingSettings = async (): Promise<TradingSettings> => {
   try {
-    fs.mkdirSync(path.dirname(SETTINGS_FILE), { recursive: true });
-  } catch {
-    // ignore
-  }
-};
+    const result = await db.execute(sql`
+      SELECT
+        allowed_symbol,
+        allowed_duration,
+        allowed_type,
+        profit_percentage,
+        is_active,
+        trading_mode,
+        daily_win_limit_enabled,
+        max_wins_per_day
+      FROM trading_settings
+      WHERE id = 1
+      LIMIT 1
+    `);
 
-const readTradingSettings = (): TradingSettings => {
-  ensureSettingsDir();
-  try {
-    if (!fs.existsSync(SETTINGS_FILE)) return defaultTradingSettings;
-    const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
-    const parsed = JSON.parse(raw) as Partial<TradingSettings>;
+    const row = (result as unknown as { rows?: any[] }).rows?.[0];
+    if (!row) return defaultTradingSettings;
+
     return {
-      ...defaultTradingSettings,
-      ...parsed,
+      allowedSymbol: String(row.allowed_symbol ?? defaultTradingSettings.allowedSymbol),
+      allowedDuration: Number(row.allowed_duration ?? defaultTradingSettings.allowedDuration),
+      allowedType: (row.allowed_type ?? defaultTradingSettings.allowedType) as 'call' | 'put',
+      profitPercentage: String(row.profit_percentage ?? defaultTradingSettings.profitPercentage),
+      isActive: Number(row.is_active ?? defaultTradingSettings.isActive) as 0 | 1,
+      tradingMode: (row.trading_mode ?? defaultTradingSettings.tradingMode) as 'classic' | 'normal',
+      dailyWinLimitEnabled: Number(
+        row.daily_win_limit_enabled ?? defaultTradingSettings.dailyWinLimitEnabled
+      ) as 0 | 1,
+      maxWinsPerDay: Number(row.max_wins_per_day ?? defaultTradingSettings.maxWinsPerDay),
     };
   } catch {
     return defaultTradingSettings;
   }
 };
 
-const writeTradingSettings = (settings: TradingSettings) => {
-  ensureSettingsDir();
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+const writeTradingSettings = async (settings: TradingSettings) => {
+  await db.execute(sql`
+    INSERT INTO trading_settings (
+      id,
+      allowed_symbol,
+      allowed_duration,
+      allowed_type,
+      profit_percentage,
+      is_active,
+      trading_mode,
+      daily_win_limit_enabled,
+      max_wins_per_day,
+      updated_at
+    ) VALUES (
+      1,
+      ${settings.allowedSymbol},
+      ${settings.allowedDuration},
+      ${settings.allowedType},
+      ${settings.profitPercentage},
+      ${settings.isActive},
+      ${settings.tradingMode},
+      ${settings.dailyWinLimitEnabled},
+      ${settings.maxWinsPerDay},
+      CURRENT_TIMESTAMP
+    )
+    ON CONFLICT (id)
+    DO UPDATE SET
+      allowed_symbol = EXCLUDED.allowed_symbol,
+      allowed_duration = EXCLUDED.allowed_duration,
+      allowed_type = EXCLUDED.allowed_type,
+      profit_percentage = EXCLUDED.profit_percentage,
+      is_active = EXCLUDED.is_active,
+      trading_mode = EXCLUDED.trading_mode,
+      daily_win_limit_enabled = EXCLUDED.daily_win_limit_enabled,
+      max_wins_per_day = EXCLUDED.max_wins_per_day,
+      updated_at = CURRENT_TIMESTAMP
+  `);
 };
 
 // Middleware for JSON parsing
@@ -97,12 +138,12 @@ app.use(
   })
 );
 
-app.get('/api/admin/trading-settings', (req, res) => {
-  const settings = readTradingSettings();
+app.get('/api/admin/trading-settings', async (req, res) => {
+  const settings = await readTradingSettings();
   res.status(200).json(settings);
 });
 
-app.put('/api/admin/trading-settings', (req, res) => {
+app.put('/api/admin/trading-settings', async (req, res) => {
   const body = req.body as Partial<TradingSettings>;
   const next: TradingSettings = {
     ...defaultTradingSettings,
@@ -117,7 +158,7 @@ app.put('/api/admin/trading-settings', (req, res) => {
     maxWinsPerDay: Number(body.maxWinsPerDay ?? defaultTradingSettings.maxWinsPerDay),
   };
   try {
-    writeTradingSettings(next);
+    await writeTradingSettings(next);
     res.status(200).json({ success: true, settings: next });
   } catch {
     res.status(500).json({ success: false });

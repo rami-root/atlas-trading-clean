@@ -44,6 +44,47 @@ export async function runMigrations() {
     `);
     console.log('✓ Transactions table created/verified');
 
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS trading_settings (
+        id INTEGER PRIMARY KEY,
+        allowed_symbol TEXT NOT NULL,
+        allowed_duration INTEGER NOT NULL,
+        allowed_type TEXT NOT NULL,
+        profit_percentage TEXT NOT NULL,
+        is_active INTEGER NOT NULL,
+        trading_mode TEXT NOT NULL,
+        daily_win_limit_enabled INTEGER NOT NULL,
+        max_wins_per_day INTEGER NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✓ Trading settings table created/verified');
+
+    await db.execute(sql`
+      INSERT INTO trading_settings (
+        id,
+        allowed_symbol,
+        allowed_duration,
+        allowed_type,
+        profit_percentage,
+        is_active,
+        trading_mode,
+        daily_win_limit_enabled,
+        max_wins_per_day
+      ) VALUES (
+        1,
+        'BTC/USDT',
+        60,
+        'call',
+        '3.00',
+        1,
+        'classic',
+        0,
+        1
+      )
+      ON CONFLICT (id) DO NOTHING
+    `);
+
     console.log('✓ All migrations completed successfully!');
   } catch (error) {
     console.error('Migration error:', error);
