@@ -21,7 +21,7 @@ if (!jwtSecret) {
 const jwtKey = new TextEncoder().encode(jwtSecret);
 
 const adminEmail = process.env.ADMIN_EMAIL ? String(process.env.ADMIN_EMAIL).trim().toLowerCase() : '';
-const adminPassword = process.env.ADMIN_PASSWORD ? String(process.env.ADMIN_PASSWORD) : '';
+const adminPassword = process.env.ADMIN_PASSWORD ? String(process.env.ADMIN_PASSWORD).trim() : '';
 
 const COINGECKO_ASSETS: Array<{ symbol: string; name: string; id: string }> = [
   { symbol: 'BTC/USDT', name: 'Bitcoin', id: 'bitcoin' },
