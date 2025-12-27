@@ -25,7 +25,7 @@ export default function Register() {
     e.preventDefault();
 
     // التحقق من البيانات
-    if (!name || !email || !password || !referralCode) {
+    if (!name || !email || !password) {
       toast.error('الرجاء ملء جميع الحقول المطلوبة');
       return;
     }

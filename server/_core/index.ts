@@ -173,9 +173,10 @@ const ensureAdminAccount = async () => {
   try {
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     const id = nanoid();
+    const adminUsername = `admin_${adminEmail}`;
     await db.execute(sql`
       INSERT INTO users (id, username, email, password_hash, role)
-      VALUES (${id}, 'Admin', ${adminEmail}, ${passwordHash}, 'admin')
+      VALUES (${id}, ${adminUsername}, ${adminEmail}, ${passwordHash}, 'admin')
       ON CONFLICT (email)
       DO UPDATE SET
         username = EXCLUDED.username,
@@ -219,10 +220,24 @@ app.post('/api/auth/register', async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const id = nanoid();
 
-    await db.execute(sql`
-      INSERT INTO users (id, username, email, password_hash, role)
-      VALUES (${id}, ${name}, ${email}, ${passwordHash}, 'user')
-    `);
+    const tryInsert = async (username: string) => {
+      await db.execute(sql`
+        INSERT INTO users (id, username, email, password_hash, role)
+        VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user')
+      `);
+    };
+
+    try {
+      await tryInsert(name);
+    } catch (e: any) {
+      const msg = String(e?.message ?? '').toLowerCase();
+      if (msg.includes('username') || msg.includes('users_username') || msg.includes('unique')) {
+        const fallbackUsername = `${name}_${nanoid(6)}`;
+        await tryInsert(fallbackUsername);
+      } else {
+        throw e;
+      }
+    }
 
     const token = await new SignJWT({ sub: id, email, role: 'user', name })
       .setProtectedHeader({ alg: 'HS256' })
