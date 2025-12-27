@@ -1,16 +1,29 @@
 import { inferAsyncReturnType } from '@trpc/server';
 import * as express from 'express';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'atlas-secret-key-2025';
 
 // A simple context function for tRPC
 export const createContext = ({ req, res }: { req: express.Request; res: express.Response }) => {
-  // Here you would typically parse the user's session or JWT from the request headers/cookies
-  // For now, we'll return a basic context
+  // Extract user from JWT token
+  let userId: string | null = null;
+  
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      const decoded = jwt.verify(token, JWT_SECRET) as any;
+      userId = decoded.sub || null;
+    }
+  } catch (error) {
+    // Token invalid or expired, userId remains null
+  }
+  
   return {
     req,
     res,
-    // Add database connection here if needed, or keep it in the procedure
-    // db: db, 
-    userId: 'mock-user-id-123', // Mock user ID for now
+    userId,
   };
 };
 

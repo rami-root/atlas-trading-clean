@@ -5,34 +5,38 @@ import { sql } from 'drizzle-orm';
 
 export const referralRouter = router({
   // Get referral info (code and link)
-  info: publicProcedure
-    .input(z.object({ userId: z.string() }))
-    .query(async ({ input }) => {
-      const userId = input.userId;
-      
-      // Get user's referral code
-      const userResult = await db.execute(sql`
-        SELECT referral_code FROM users WHERE id = ${userId} LIMIT 1
-      `);
-      const user = Array.isArray(userResult) ? userResult[0] : (userResult as any).rows?.[0];
-      
-      if (!user || !user.referral_code) {
-        throw new Error('User not found or no referral code');
-      }
-      
-      const baseUrl = process.env.VITE_API_BASE_URL || 'https://atlas-trading-clean.onrender.com';
-      
-      return {
-        referralCode: user.referral_code,
-        referralLink: `${baseUrl}/register?ref=${user.referral_code}`,
-      };
-    }),
+  info: publicProcedure.query(async ({ ctx }) => {
+    const userId = ctx.userId;
+    
+    if (!userId) {
+      throw new Error('Unauthorized');
+    }
+    
+    // Get user's referral code
+    const userResult = await db.execute(sql`
+      SELECT referral_code FROM users WHERE id = ${userId} LIMIT 1
+    `);
+    const user = Array.isArray(userResult) ? userResult[0] : (userResult as any).rows?.[0];
+    
+    if (!user || !user.referral_code) {
+      throw new Error('User not found or no referral code');
+    }
+    
+    const baseUrl = process.env.VITE_API_BASE_URL || 'https://atlas-trading-clean.onrender.com';
+    
+    return {
+      referralCode: user.referral_code,
+      referralLink: `${baseUrl}/register?ref=${user.referral_code}`,
+    };
+  }),
 
   // Get team statistics
-  team: publicProcedure
-    .input(z.object({ userId: z.string() }))
-    .query(async ({ input }) => {
-      const userId = input.userId;
+  team: publicProcedure.query(async ({ ctx }) => {
+    const userId = ctx.userId;
+    
+    if (!userId) {
+      throw new Error('Unauthorized');
+    }
 
     // Get level 1 referrals (direct referrals)
     const level1Result = await db.execute(sql`
@@ -74,19 +78,24 @@ export const referralRouter = router({
       ? Number(rewardsResult[0]?.total || 0)
       : Number((rewardsResult as any).rows?.[0]?.total || 0);
 
+    const total = level1Count + level2Count + level3Count;
+
     return {
       level1: level1Count,
       level2: level2Count,
       level3: level3Count,
+      total,
       totalRewards,
     };
   }),
 
   // Get detailed team members
-  members: publicProcedure
-    .input(z.object({ userId: z.string() }))
-    .query(async ({ input }) => {
-      const userId = input.userId;
+  members: publicProcedure.query(async ({ ctx }) => {
+    const userId = ctx.userId;
+    
+    if (!userId) {
+      throw new Error('Unauthorized');
+    }
 
     const result = await db.execute(sql`
       SELECT 
