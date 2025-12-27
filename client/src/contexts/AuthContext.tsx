@@ -58,20 +58,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const response = await api.post('/api/auth/login', { email, password });
-    const { token, user } = response.data;
-    
-    localStorage.setItem('auth_token', token);
-    setUser(user);
+    try {
+      const response = await api.post('/api/auth/login', { email, password });
+      const data = response.data;
+      if (typeof data === 'string' && data.toLowerCase().includes('<!doctype html')) {
+        throw new Error(
+          'API غير متصل: الطلب رجع صفحة HTML. تأكد أن /api/auth/login يعمل وأن VITE_API_BASE_URL مضبوط على رابط السيرفر.'
+        );
+      }
+      const { token, user } = data;
+
+      localStorage.setItem('auth_token', token);
+      setUser(user);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const respData = err?.response?.data;
+      const serverMsg = typeof respData?.error === 'string' ? respData.error : null;
+      if (typeof respData === 'string' && respData.toLowerCase().includes('<!doctype html')) {
+        throw new Error(
+          'API غير متصل: الطلب رجع صفحة HTML. تأكد أن /api/auth/login يعمل وأن VITE_API_BASE_URL مضبوط على رابط السيرفر.'
+        );
+      }
+      if (serverMsg) {
+        throw new Error(serverMsg);
+      }
+      if (status) {
+        throw new Error(`فشل تسجيل الدخول (HTTP ${status})`);
+      }
+      throw new Error('فشل تسجيل الدخول');
+    }
   };
 
   const register = async (data: RegisterData) => {
-    const response = await api.post('/api/auth/register', data);
-    const { token, user } = response.data;
-    
-    if (token) {
-      localStorage.setItem('auth_token', token);
-      setUser(user);
+    try {
+      const response = await api.post('/api/auth/register', data);
+      const resp = response.data;
+      if (typeof resp === 'string' && resp.toLowerCase().includes('<!doctype html')) {
+        throw new Error(
+          'API غير متصل: الطلب رجع صفحة HTML. تأكد أن /api/auth/register يعمل وأن VITE_API_BASE_URL مضبوط على رابط السيرفر.'
+        );
+      }
+      const { token, user } = resp;
+
+      if (token) {
+        localStorage.setItem('auth_token', token);
+        setUser(user);
+      }
+    } catch (err: any) {
+      const status = err?.response?.status;
+      const respData = err?.response?.data;
+      const serverMsg = typeof respData?.error === 'string' ? respData.error : null;
+      if (typeof respData === 'string' && respData.toLowerCase().includes('<!doctype html')) {
+        throw new Error(
+          'API غير متصل: الطلب رجع صفحة HTML. تأكد أن /api/auth/register يعمل وأن VITE_API_BASE_URL مضبوط على رابط السيرفر.'
+        );
+      }
+      if (serverMsg) {
+        throw new Error(serverMsg);
+      }
+      if (status) {
+        throw new Error(`فشل التسجيل (HTTP ${status})`);
+      }
+      throw new Error('فشل التسجيل');
     }
   };
 
