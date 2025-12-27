@@ -487,6 +487,20 @@ app.post('/api/auth/login', async (req, res) => {
     }
     console.log('✅ Login successful for:', email);
 
+    // Generate referral code if user doesn't have one
+    let referralCode = String(row.referral_code ?? '');
+    if (!referralCode || referralCode === 'ATLAS123' || referralCode === '') {
+      referralCode = await generateReferralCode();
+      try {
+        await db.execute(sql`
+          UPDATE users SET referral_code = ${referralCode} WHERE id = ${row.id}
+        `);
+        console.log(`✅ Generated new referral code for ${email}: ${referralCode}`);
+      } catch (error) {
+        console.error('Error updating referral code:', error);
+      }
+    }
+
     const role = String(row.role ?? 'user');
     const token = await new SignJWT({ sub: String(row.id), email, role, name: String(row.username) })
       .setProtectedHeader({ alg: 'HS256' })
@@ -502,7 +516,7 @@ app.post('/api/auth/login', async (req, res) => {
         email: String(row.email),
         role,
         balance: 0,
-        referralCode: String(row.referral_code ?? 'ATLAS123'),
+        referralCode,
       },
     });
   } catch (error) {
@@ -524,6 +538,29 @@ app.get('/api/auth/me', async (req, res) => {
     const email = typeof payload.email === 'string' ? payload.email : null;
     const name = typeof payload.name === 'string' ? payload.name : null;
     const role = typeof payload.role === 'string' ? payload.role : 'user';
+    const userId = typeof payload.sub === 'string' ? payload.sub : null;
+
+    // Fetch referral code from database
+    let referralCode = 'ATLAS123';
+    if (userId) {
+      try {
+        const result = await db.execute(sql`
+          SELECT referral_code FROM users WHERE id = ${userId} LIMIT 1
+        `);
+        const row = Array.isArray(result) ? result[0] : (result as unknown as { rows?: any[] }).rows?.[0];
+        if (row && row.referral_code) {
+          referralCode = String(row.referral_code);
+        } else if (row) {
+          // Generate and save if missing
+          referralCode = await generateReferralCode();
+          await db.execute(sql`
+            UPDATE users SET referral_code = ${referralCode} WHERE id = ${userId}
+          `);
+        }
+      } catch (error) {
+        console.error('Error fetching referral code:', error);
+      }
+    }
 
     return res.status(200).json({
       user: {
@@ -532,7 +569,7 @@ app.get('/api/auth/me', async (req, res) => {
         email,
         role,
         balance: 0,
-        referralCode: 'ATLAS123',
+        referralCode,
       },
     });
   } catch {
