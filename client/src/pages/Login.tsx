@@ -52,7 +52,7 @@ export default function Login() {
       // الانتقال إلى الصفحة الرئيسية
       setLocation('/');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'حدث خطأ أثناء تسجيل الدخول');
+      toast.error(error?.message || error?.response?.data?.error || 'حدث خطأ أثناء تسجيل الدخول');
     } finally {
       setLoading(false);
     }

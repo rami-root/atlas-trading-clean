@@ -55,7 +55,7 @@ export default function Register() {
       // الانتقال إلى الصفحة الرئيسية
       setLocation('/');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'حدث خطأ أثناء التسجيل');
+      toast.error(error?.message || error?.response?.data?.error || 'حدث خطأ أثناء التسجيل');
     } finally {
       setLoading(false);
     }
@@ -160,14 +160,13 @@ export default function Register() {
           {/* رمز الدعوة */}
           <div>
             <label className="text-sm font-medium text-foreground block mb-2">
-              رمز الدعوة <span className="text-red-500">*</span>
+              رمز الدعوة
             </label>
             <Input
               type="text"
               placeholder="أدخل رمز الدعوة"
               value={referralCode}
               onChange={(e) => setReferralCode(e.target.value)}
-              required
             />
           </div>
 
