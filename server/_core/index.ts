@@ -222,10 +222,22 @@ app.post('/api/auth/register', async (req, res) => {
     const id = nanoid();
 
     const tryInsert = async (username: string) => {
-      await db.execute(sql`
-        INSERT INTO users (id, username, email, password_hash, role)
-        VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user')
-      `);
+      try {
+        await db.execute(sql`
+          INSERT INTO users (id, username, email, password_hash, role)
+          VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user')
+        `);
+      } catch (e: any) {
+        const msg = String(e?.message ?? '').toLowerCase();
+        if (msg.includes('column') && msg.includes('role')) {
+          await db.execute(sql`
+            INSERT INTO users (id, username, email, password_hash)
+            VALUES (${id}, ${username}, ${email}, ${passwordHash})
+          `);
+          return;
+        }
+        throw e;
+      }
     };
 
     try {
@@ -258,6 +270,7 @@ app.post('/api/auth/register', async (req, res) => {
       },
     });
   } catch (error: any) {
+    console.error('Registration error:', error);
     const msg = String(error?.message ?? 'Registration failed');
     if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('unique')) {
       return res.status(409).json({ error: 'Email already exists' });
@@ -276,12 +289,27 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const result = await db.execute(sql`
-      SELECT id, username, email, password_hash, role
-      FROM users
-      WHERE email = ${email}
-      LIMIT 1
-    `);
+    let result: any;
+    try {
+      result = await db.execute(sql`
+        SELECT id, username, email, password_hash, role
+        FROM users
+        WHERE email = ${email}
+        LIMIT 1
+      `);
+    } catch (e: any) {
+      const msg = String(e?.message ?? '').toLowerCase();
+      if (msg.includes('column') && msg.includes('role')) {
+        result = await db.execute(sql`
+          SELECT id, username, email, password_hash
+          FROM users
+          WHERE email = ${email}
+          LIMIT 1
+        `);
+      } else {
+        throw e;
+      }
+    }
 
     const row = (result as unknown as { rows?: any[] }).rows?.[0];
     if (!row) {
@@ -311,7 +339,8 @@ app.post('/api/auth/login', async (req, res) => {
         referralCode: 'ATLAS123',
       },
     });
-  } catch {
+  } catch (error) {
+    console.error('Login error:', error);
     return res.status(500).json({ error: 'Login failed' });
   }
 });
