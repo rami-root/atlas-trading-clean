@@ -724,3 +724,76 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
 
 // Export app for Vercel
 export default app;
+// Add this code to /home/ubuntu/atlas-project/server/_core/index.ts after the /api/auth/me endpoint
+
+app.post('/api/deposit/create', async (req, res) => {
+  const raw = String(req.headers.authorization ?? '');
+  const token = raw.startsWith('Bearer ') ? raw.slice('Bearer '.length) : '';
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized - Please login' });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, jwtKey);
+    const userId = typeof payload.sub === 'string' ? payload.sub : null;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized - Invalid token' });
+    }
+
+    const body = req.body as { amount?: string | number; walletAddress?: string };
+    const amount = typeof body.amount === 'string' ? parseFloat(body.amount) : Number(body.amount || 0);
+
+    if (amount <= 0) {
+      return res.status(400).json({ error: 'Amount must be greater than 0' });
+    }
+
+    const result = await db.execute(sql`
+      INSERT INTO deposit_requests (user_id, amount, status, notes)
+      VALUES (${userId}, ${amount}, 'pending', ${body.walletAddress ? `Wallet: ${body.walletAddress}` : null})
+      RETURNING id
+    `);
+
+    const requestId = Array.isArray(result) ? result[0]?.id : (result as any).rows?.[0]?.id;
+
+    return res.status(200).json({
+      success: true,
+      message: 'تم إرسال طلب الإيداع بنجاح. في انتظار موافقة الإدارة.',
+      requestId,
+    });
+  } catch (error) {
+    console.error('Error creating deposit request:', error);
+    return res.status(500).json({ error: 'Failed to create deposit request' });
+  }
+});
+
+app.get('/api/deposit/my-requests', async (req, res) => {
+  const raw = String(req.headers.authorization ?? '');
+  const token = raw.startsWith('Bearer ') ? raw.slice('Bearer '.length) : '';
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized - Please login' });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, jwtKey);
+    const userId = typeof payload.sub === 'string' ? payload.sub : null;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized - Invalid token' });
+    }
+
+    const result = await db.execute(sql`
+      SELECT * FROM deposit_requests 
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+    `);
+    
+    const requests = Array.isArray(result) ? result : (result as any).rows || [];
+    return res.status(200).json(requests);
+  } catch (error) {
+    console.error('Error fetching deposit requests:', error);
+    return res.status(500).json({ error: 'Failed to fetch deposit requests' });
+  }
+});

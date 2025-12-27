@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { trpc } from "@/lib/trpc";
+import axios from 'axios';
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ export default function Deposit() {
   const [, setLocation] = useLocation();
   const [amount, setAmount] = useState('');
   const [walletAddress, setWalletAddress] = useState('');
-  const createDeposit = trpc.deposit.create.useMutation();
+  const [loading, setLoading] = useState(false);
 
   const quickAmounts = [30, 100, 200, 600];
   const platformWallet = "TNkAtCP6cPpqLpCgz416c6ympDJnQ8o1dx";
@@ -28,13 +28,27 @@ export default function Deposit() {
       return;
     }
 
+    setLoading(true);
     try {
-      await createDeposit.mutateAsync({ amount, walletAddress });
-      toast.success('تم إنشاء طلب الإيداع بنجاح!');
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('الرجاء تسجيل الدخول أولاً');
+        setLocation('/login');
+        return;
+      }
+
+      const response = await axios.post('/api/deposit/create', 
+        { amount, walletAddress },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success(response.data.message || 'تم إرسال طلب الإيداع بنجاح!');
       setAmount('');
       setWalletAddress('');
     } catch (error: any) {
-      toast.error(error.message || 'حدث خطأ');
+      toast.error(error.response?.data?.error || 'حدث خطأ');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -135,10 +149,10 @@ export default function Deposit() {
 
         <Button
           onClick={handleDeposit}
-          disabled={createDeposit.isPending || !amount}
+          disabled={loading || !amount}
           className="w-full py-6 text-lg font-bold"
         >
-          {createDeposit.isPending ? 'جاري الإرسال...' : 'تأكيد طلب الإيداع'}
+          {loading ? 'جاري الإرسال...' : 'تأكيد طلب الإيداع'}
         </Button>
       </div>
 
