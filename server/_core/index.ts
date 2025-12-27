@@ -169,7 +169,13 @@ const initializeDatabase = async () => {
 initializeDatabase().catch(console.error);
 
 const ensureAdminAccount = async () => {
-  if (!adminEmail || !adminPassword) return;
+  console.log('🔐 Ensuring admin account...');
+  console.log('Admin email:', adminEmail ? '✓ Set' : '✗ Not set');
+  console.log('Admin password:', adminPassword ? '✓ Set' : '✗ Not set');
+  if (!adminEmail || !adminPassword) {
+    console.warn('⚠️  Admin account creation skipped: ADMIN_EMAIL or ADMIN_PASSWORD not set');
+    return;
+  }
   try {
     await initializeDatabase();
     const passwordHash = await bcrypt.hash(adminPassword, 10);
@@ -184,8 +190,9 @@ const ensureAdminAccount = async () => {
         password_hash = EXCLUDED.password_hash,
         role = 'admin'
     `);
+    console.log('✅ Admin account created/updated:', adminEmail);
   } catch (error) {
-    console.error('Failed to ensure admin account:', error);
+    console.error('❌ Failed to ensure admin account:', error);
   }
 };
 
