@@ -3,6 +3,7 @@ import { userRouter } from '../routers/user';
 import { capitalRouter } from '../routers/capital';
 import { cryptoRouter } from '../routers/crypto';
 import { referralRouter } from '../routers/referral';
+import { depositRouter } from '../routers/deposit';
 
 // Define the main application router
 export const appRouter = router({
@@ -10,6 +11,7 @@ export const appRouter = router({
   capital: capitalRouter,
   crypto: cryptoRouter,
   referral: referralRouter,
+  deposit: depositRouter,
 });
 
 // Export type for the app router
