@@ -295,6 +295,7 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'Invalid credentials' });
   }
 
+  console.log('🔍 Login attempt for email:', email);
   try {
     let result: any;
     try {
@@ -304,6 +305,7 @@ app.post('/api/auth/login', async (req, res) => {
         WHERE email = ${email}
         LIMIT 1
       `);
+      console.log('✅ User found:', result.rows?.[0]?.email);
     } catch (e: any) {
       const msg = String(e?.message ?? '').toLowerCase();
       if (msg.includes('column') && msg.includes('role')) {
@@ -320,13 +322,17 @@ app.post('/api/auth/login', async (req, res) => {
 
     const row = (result as unknown as { rows?: any[] }).rows?.[0];
     if (!row) {
+      console.log('❌ User not found in database');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const ok = await bcrypt.compare(password, String(row.password_hash ?? ''));
+    console.log('🔑 Password check result:', ok);
     if (!ok) {
+      console.log('❌ Invalid password');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    console.log('✅ Login successful for:', email);
 
     const role = String(row.role ?? 'user');
     const token = await new SignJWT({ sub: String(row.id), email, role, name: String(row.username) })
