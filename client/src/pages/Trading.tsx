@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
