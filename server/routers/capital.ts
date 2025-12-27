@@ -158,7 +158,7 @@ const addFunding = async (userId: string, amount: number) => {
     }
 
     // Record the funding transaction
-    await db.insert(transactions).values({
+    const transactionResult = await db.insert(transactions).values({
       userId,
       type: 'deposit',
       amount,
@@ -166,6 +166,64 @@ const addFunding = async (userId: string, amount: number) => {
       description: `Funding deposit of $${amount}`,
       createdAt: new Date(),
     });
+
+    // Process referral rewards
+    try {
+      // Get all referrers for this user (up to 3 levels)
+      const referrersResult = await db.execute(sql`
+        SELECT referrer_id, level FROM referrals WHERE referred_id = ${userId}
+      `);
+      const referrers = Array.isArray(referrersResult) ? referrersResult : (referrersResult as any).rows || [];
+
+      for (const ref of referrers) {
+        let percentage = 0;
+        if (ref.level === 1) percentage = 0.07; // 7%
+        else if (ref.level === 2) percentage = 0.02; // 2%
+        else if (ref.level === 3) percentage = 0.01; // 1%
+
+        if (percentage > 0) {
+          const rewardAmount = amount * percentage;
+
+          // Add reward to referrer's capital
+          const referrerCapital = await db
+            .select()
+            .from(capital)
+            .where(eq(capital.userId, ref.referrer_id))
+            .limit(1);
+
+          if (referrerCapital.length > 0) {
+            const current = referrerCapital[0];
+            await db
+              .update(capital)
+              .set({
+                profitBuffer: current.profitBuffer + rewardAmount,
+                availableCapital: current.availableCapital + rewardAmount,
+                updatedAt: new Date(),
+              })
+              .where(eq(capital.userId, ref.referrer_id));
+          } else {
+            // Create capital record if doesn't exist
+            await db.insert(capital).values({
+              userId: ref.referrer_id,
+              funding: 0,
+              profitBuffer: rewardAmount,
+              availableCapital: rewardAmount,
+              updatedAt: new Date(),
+            });
+          }
+
+          // Record the reward
+          await db.execute(sql`
+            INSERT INTO referral_rewards (user_id, from_user_id, amount, percentage, level)
+            VALUES (${ref.referrer_id}, ${userId}, ${rewardAmount}, ${percentage}, ${ref.level})
+          `);
+
+          console.log(`✅ Referral reward: ${rewardAmount} USDT (${percentage * 100}%) to referrer at level ${ref.level}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing referral rewards:', error);
+    }
 
     return {
       success: true,

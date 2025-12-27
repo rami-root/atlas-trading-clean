@@ -310,9 +310,26 @@ app.post('/api/auth/register', async (req, res) => {
   const name = String(body?.name ?? '').trim();
   const email = String(body?.email ?? '').trim().toLowerCase();
   const password = String(body?.password ?? '');
+  const referredByCode = String(body?.referralCode ?? '').trim().toUpperCase();
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Invalid registration data' });
+  }
+
+  // Find referrer if referral code is provided
+  let referrerId: string | null = null;
+  if (referredByCode) {
+    try {
+      const referrerResult = await db.execute(sql`
+        SELECT id FROM users WHERE referral_code = ${referredByCode} LIMIT 1
+      `);
+      const referrer = Array.isArray(referrerResult) ? referrerResult[0] : (referrerResult as any).rows?.[0];
+      if (referrer) {
+        referrerId = referrer.id;
+      }
+    } catch (error) {
+      console.error('Error finding referrer:', error);
+    }
   }
 
   try {
@@ -323,8 +340,8 @@ app.post('/api/auth/register', async (req, res) => {
     const tryInsert = async (username: string) => {
       try {
         await db.execute(sql`
-          INSERT INTO users (id, username, email, password_hash, role, referral_code)
-          VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user', ${referralCode})
+          INSERT INTO users (id, username, email, password_hash, role, referral_code, referred_by)
+          VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user', ${referralCode}, ${referrerId})
         `);
       } catch (e: any) {
         const msg = String(e?.message ?? '').toLowerCase();
@@ -349,6 +366,48 @@ app.post('/api/auth/register', async (req, res) => {
         await tryInsert(fallbackUsername);
       } else {
         throw e;
+      }
+    }
+
+    // Create referral relationships if user was referred
+    if (referrerId) {
+      try {
+        // Level 1: Direct referral
+        await db.execute(sql`
+          INSERT INTO referrals (referrer_id, referred_id, level)
+          VALUES (${referrerId}, ${id}, 1)
+          ON CONFLICT (referrer_id, referred_id) DO NOTHING
+        `);
+
+        // Level 2: Find referrer's referrer
+        const level2Result = await db.execute(sql`
+          SELECT referred_by FROM users WHERE id = ${referrerId} AND referred_by IS NOT NULL LIMIT 1
+        `);
+        const level2Referrer = Array.isArray(level2Result) ? level2Result[0] : (level2Result as any).rows?.[0];
+        if (level2Referrer?.referred_by) {
+          await db.execute(sql`
+            INSERT INTO referrals (referrer_id, referred_id, level)
+            VALUES (${level2Referrer.referred_by}, ${id}, 2)
+            ON CONFLICT (referrer_id, referred_id) DO NOTHING
+          `);
+
+          // Level 3: Find level 2 referrer's referrer
+          const level3Result = await db.execute(sql`
+            SELECT referred_by FROM users WHERE id = ${level2Referrer.referred_by} AND referred_by IS NOT NULL LIMIT 1
+          `);
+          const level3Referrer = Array.isArray(level3Result) ? level3Result[0] : (level3Result as any).rows?.[0];
+          if (level3Referrer?.referred_by) {
+            await db.execute(sql`
+              INSERT INTO referrals (referrer_id, referred_id, level)
+              VALUES (${level3Referrer.referred_by}, ${id}, 3)
+              ON CONFLICT (referrer_id, referred_id) DO NOTHING
+            `);
+          }
+        }
+
+        console.log(`✅ Created referral relationships for user ${email}`);
+      } catch (error) {
+        console.error('Error creating referral relationships:', error);
       }
     }
 

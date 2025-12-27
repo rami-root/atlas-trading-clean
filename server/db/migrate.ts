@@ -30,6 +30,41 @@ export async function runMigrations() {
     `);
     console.log('✓ Referral code column added/verified');
 
+    // Add referred_by column to track who referred this user
+    await db.execute(sql`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS referred_by TEXT REFERENCES users(id)
+    `);
+    console.log('✓ Referred by column added/verified');
+
+    // Create referrals table to track referral relationships
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS referrals (
+        id SERIAL PRIMARY KEY,
+        referrer_id TEXT NOT NULL REFERENCES users(id),
+        referred_id TEXT NOT NULL REFERENCES users(id),
+        level INTEGER NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(referrer_id, referred_id)
+      )
+    `);
+    console.log('✓ Referrals table created/verified');
+
+    // Create referral_rewards table to track rewards
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS referral_rewards (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        from_user_id TEXT NOT NULL REFERENCES users(id),
+        amount REAL NOT NULL,
+        percentage REAL NOT NULL,
+        level INTEGER NOT NULL,
+        transaction_id INTEGER REFERENCES transactions(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✓ Referral rewards table created/verified');
+
     // Create capital table if it doesn't exist
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS capital (
