@@ -52,6 +52,10 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    if (!import.meta.env.DEV) {
+      return config;
+    }
+
     const url = String(config.url ?? '');
     if (url === '/api/auth/login') {
       config.adapter = async (cfg: any) => {

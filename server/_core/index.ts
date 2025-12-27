@@ -7,9 +7,18 @@ import { createContext } from '../trpc/context';
 import { runMigrations } from '../db/migrate';
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
+import bcrypt from 'bcryptjs';
+import { nanoid } from 'nanoid';
+import { jwtVerify, SignJWT } from 'jose';
 
 const app = express();
 const port = process.env.PORT || 3000;
+
+const jwtSecret = process.env.AUTH_JWT_SECRET;
+if (!jwtSecret) {
+  throw new Error('AUTH_JWT_SECRET environment variable is not set');
+}
+const jwtKey = new TextEncoder().encode(jwtSecret);
 
 type TradingSettings = {
   allowedSymbol: string;
@@ -137,6 +146,136 @@ app.use(
     createContext,
   })
 );
+
+app.post('/api/auth/register', async (req, res) => {
+  const body = req.body as {
+    name?: string;
+    email?: string;
+    password?: string;
+    phoneNumber?: string;
+    referralCode?: string;
+  };
+
+  const name = String(body?.name ?? '').trim();
+  const email = String(body?.email ?? '').trim().toLowerCase();
+  const password = String(body?.password ?? '');
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Invalid registration data' });
+  }
+
+  try {
+    const passwordHash = await bcrypt.hash(password, 10);
+    const id = nanoid();
+
+    await db.execute(sql`
+      INSERT INTO users (id, username, email, password_hash)
+      VALUES (${id}, ${name}, ${email}, ${passwordHash})
+    `);
+
+    const token = await new SignJWT({ sub: id, email, role: 'user', name })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('30d')
+      .sign(jwtKey);
+
+    return res.status(200).json({
+      token,
+      user: {
+        id: 2,
+        name,
+        email,
+        role: 'user',
+        balance: 0,
+        referralCode: 'ATLAS123',
+      },
+    });
+  } catch (error: any) {
+    const msg = String(error?.message ?? 'Registration failed');
+    if (msg.toLowerCase().includes('duplicate') || msg.toLowerCase().includes('unique')) {
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+    return res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const body = req.body as { email?: string; password?: string };
+  const email = String(body?.email ?? '').trim().toLowerCase();
+  const password = String(body?.password ?? '');
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Invalid credentials' });
+  }
+
+  try {
+    const result = await db.execute(sql`
+      SELECT id, username, email, password_hash
+      FROM users
+      WHERE email = ${email}
+      LIMIT 1
+    `);
+
+    const row = (result as unknown as { rows?: any[] }).rows?.[0];
+    if (!row) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const ok = await bcrypt.compare(password, String(row.password_hash ?? ''));
+    if (!ok) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = await new SignJWT({ sub: String(row.id), email, role: 'user', name: String(row.username) })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('30d')
+      .sign(jwtKey);
+
+    return res.status(200).json({
+      token,
+      user: {
+        id: 2,
+        name: String(row.username),
+        email: String(row.email),
+        role: 'user',
+        balance: 0,
+        referralCode: 'ATLAS123',
+      },
+    });
+  } catch {
+    return res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.get('/api/auth/me', async (req, res) => {
+  const raw = String(req.headers.authorization ?? '');
+  const token = raw.startsWith('Bearer ') ? raw.slice('Bearer '.length) : '';
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, jwtKey);
+    const email = typeof payload.email === 'string' ? payload.email : null;
+    const name = typeof payload.name === 'string' ? payload.name : null;
+    const role = typeof payload.role === 'string' ? payload.role : 'user';
+
+    return res.status(200).json({
+      user: {
+        id: 2,
+        name,
+        email,
+        role,
+        balance: 0,
+        referralCode: 'ATLAS123',
+      },
+    });
+  } catch {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+});
 
 app.get('/api/admin/trading-settings', async (req, res) => {
   const settings = await readTradingSettings();
