@@ -171,6 +171,7 @@ initializeDatabase().catch(console.error);
 const ensureAdminAccount = async () => {
   if (!adminEmail || !adminPassword) return;
   try {
+    await initializeDatabase();
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     const id = nanoid();
     const adminUsername = `admin_${adminEmail}`;
