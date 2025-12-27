@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { Button } from "@/components/ui/button";
-import { User, Settings, LogOut, FileText, TrendingUp, Wallet as WalletIcon, Shield } from "lucide-react";
+import { User, Settings, LogOut, FileText, TrendingUp, Wallet as WalletIcon, Shield, Copy, Share2 } from "lucide-react";
 import { useLocation } from "wouter";
 
 export default function Account() {
@@ -58,6 +58,37 @@ export default function Account() {
               <div className="text-xs text-muted-foreground mt-1">الرصيد المتاح</div>
             </div>
           </div>
+        </div>
+
+        {/* كود الدعوة */}
+        <div className="bg-gradient-to-r from-primary/10 to-blue-500/10 border border-primary/30 rounded-lg p-6 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Share2 className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-bold text-foreground">كود الدعوة الخاص بك</h3>
+          </div>
+          <div className="bg-background/50 rounded-lg p-4 mb-3">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-primary tracking-wider mb-2">
+                {user?.referralCode || 'LOADING...'}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                شارك هذا الكود مع أصدقائك للحصول على مكافآت
+              </div>
+            </div>
+          </div>
+          <Button
+            onClick={() => {
+              if (user?.referralCode) {
+                navigator.clipboard.writeText(user.referralCode);
+                // يمكن إضافة toast notification هنا
+              }
+            }}
+            variant="outline"
+            className="w-full"
+          >
+            <Copy className="w-4 h-4 ml-2" />
+            نسخ الكود
+          </Button>
         </div>
 
         {/* قائمة الإعدادات */}

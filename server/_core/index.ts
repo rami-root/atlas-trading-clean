@@ -181,15 +181,36 @@ const ensureAdminAccount = async () => {
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     const id = nanoid();
     const adminUsername = `admin_${adminEmail}`;
-    await db.execute(sql`
-      INSERT INTO users (id, username, email, password_hash, role)
-      VALUES (${id}, ${adminUsername}, ${adminEmail}, ${passwordHash}, 'admin')
-      ON CONFLICT (email)
-      DO UPDATE SET
-        username = EXCLUDED.username,
-        password_hash = EXCLUDED.password_hash,
-        role = 'admin'
-    `);
+    const adminReferralCode = 'ADMIN001';
+    
+    try {
+      await db.execute(sql`
+        INSERT INTO users (id, username, email, password_hash, role, referral_code)
+        VALUES (${id}, ${adminUsername}, ${adminEmail}, ${passwordHash}, 'admin', ${adminReferralCode})
+        ON CONFLICT (email)
+        DO UPDATE SET
+          username = EXCLUDED.username,
+          password_hash = EXCLUDED.password_hash,
+          role = 'admin',
+          referral_code = COALESCE(users.referral_code, EXCLUDED.referral_code)
+      `);
+    } catch (e: any) {
+      const msg = String(e?.message ?? '').toLowerCase();
+      if (msg.includes('column') && msg.includes('referral_code')) {
+        // Fallback if referral_code column doesn't exist yet
+        await db.execute(sql`
+          INSERT INTO users (id, username, email, password_hash, role)
+          VALUES (${id}, ${adminUsername}, ${adminEmail}, ${passwordHash}, 'admin')
+          ON CONFLICT (email)
+          DO UPDATE SET
+            username = EXCLUDED.username,
+            password_hash = EXCLUDED.password_hash,
+            role = 'admin'
+        `);
+      } else {
+        throw e;
+      }
+    }
     console.log('✅ Admin account created/updated:', adminEmail);
   } catch (error) {
     console.error('❌ Failed to ensure admin account:', error);
@@ -197,6 +218,76 @@ const ensureAdminAccount = async () => {
 };
 
 ensureAdminAccount().catch(console.error);
+
+// Update existing users with referral codes
+const updateExistingUsersWithReferralCodes = async () => {
+  try {
+    // Get all users without referral codes
+    const result = await db.execute(sql`
+      SELECT id, email FROM users WHERE referral_code IS NULL OR referral_code = ''
+    `);
+    
+    const users = Array.isArray(result) ? result : (result as unknown as { rows?: any[] }).rows ?? [];
+    
+    if (users.length === 0) {
+      console.log('✅ All users already have referral codes');
+      return;
+    }
+    
+    console.log(`🔄 Updating ${users.length} users with referral codes...`);
+    
+    for (const user of users) {
+      const code = await generateReferralCode();
+      await db.execute(sql`
+        UPDATE users SET referral_code = ${code} WHERE id = ${user.id}
+      `);
+      console.log(`✅ Updated user ${user.email} with code ${code}`);
+    }
+    
+    console.log('✅ All existing users updated with referral codes');
+  } catch (error: any) {
+    const msg = String(error?.message ?? '').toLowerCase();
+    if (msg.includes('column') && msg.includes('referral_code')) {
+      console.log('ℹ️ Referral code column not ready yet, will update later');
+    } else {
+      console.error('❌ Failed to update existing users:', error);
+    }
+  }
+};
+
+// Run after a short delay to ensure migrations are complete
+setTimeout(() => {
+  updateExistingUsersWithReferralCodes().catch(console.error);
+}, 3000);
+
+// Generate unique referral code
+const generateReferralCode = async (): Promise<string> => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  
+  // Generate a random 8-character code
+  for (let i = 0; i < 8; i++) {
+    code += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  
+  // Check if code already exists
+  try {
+    const result = await db.execute(sql`
+      SELECT referral_code FROM users WHERE referral_code = ${code} LIMIT 1
+    `);
+    const existing = Array.isArray(result) ? result[0] : (result as unknown as { rows?: any[] }).rows?.[0];
+    
+    if (existing) {
+      // If code exists, generate a new one recursively
+      return generateReferralCode();
+    }
+    
+    return code;
+  } catch (error) {
+    // If column doesn't exist yet, just return the code
+    return code;
+  }
+};
 
 // TRPC Middleware
 app.use(
@@ -227,16 +318,18 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const passwordHash = await bcrypt.hash(password, 10);
     const id = nanoid();
+    const referralCode = await generateReferralCode();
 
     const tryInsert = async (username: string) => {
       try {
         await db.execute(sql`
-          INSERT INTO users (id, username, email, password_hash, role)
-          VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user')
+          INSERT INTO users (id, username, email, password_hash, role, referral_code)
+          VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user', ${referralCode})
         `);
       } catch (e: any) {
         const msg = String(e?.message ?? '').toLowerCase();
-        if (msg.includes('column') && msg.includes('role')) {
+        if (msg.includes('column') && (msg.includes('role') || msg.includes('referral_code'))) {
+          // Try without role and referral_code columns
           await db.execute(sql`
             INSERT INTO users (id, username, email, password_hash)
             VALUES (${id}, ${username}, ${email}, ${passwordHash})
@@ -273,7 +366,7 @@ app.post('/api/auth/register', async (req, res) => {
         email,
         role: 'user',
         balance: 0,
-        referralCode: 'ATLAS123',
+        referralCode,
       },
     });
   } catch (error: any) {
@@ -300,7 +393,7 @@ app.post('/api/auth/login', async (req, res) => {
     let result: any;
     try {
       result = await db.execute(sql`
-        SELECT id, username, email, password_hash, role
+        SELECT id, username, email, password_hash, role, referral_code
         FROM users
         WHERE email = ${email}
         LIMIT 1
@@ -311,7 +404,7 @@ app.post('/api/auth/login', async (req, res) => {
       const msg = String(e?.message ?? '').toLowerCase();
       if (msg.includes('column') && msg.includes('role')) {
         result = await db.execute(sql`
-          SELECT id, username, email, password_hash
+          SELECT id, username, email, password_hash, referral_code
           FROM users
           WHERE email = ${email}
           LIMIT 1
@@ -350,7 +443,7 @@ app.post('/api/auth/login', async (req, res) => {
         email: String(row.email),
         role,
         balance: 0,
-        referralCode: 'ATLAS123',
+        referralCode: String(row.referral_code ?? 'ATLAS123'),
       },
     });
   } catch (error) {

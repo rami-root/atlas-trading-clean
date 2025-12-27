@@ -23,6 +23,13 @@ export async function runMigrations() {
       ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'
     `);
 
+    // Add referral_code column if it doesn't exist
+    await db.execute(sql`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS referral_code TEXT UNIQUE
+    `);
+    console.log('✓ Referral code column added/verified');
+
     // Create capital table if it doesn't exist
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS capital (
