@@ -3,14 +3,18 @@ import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import { Users, Copy, QrCode, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Team() {
-  const { data: referralInfo, isLoading: isLoadingReferral } = trpc.referral.info.useQuery();
+  const { user, loading } = useAuth();
   const { data: team, isLoading: isLoadingTeam } = trpc.referral.team.useQuery();
+  
+  const referralCode = user?.referralCode || 'LOADING';
+  const referralLink = referralCode !== 'LOADING' ? `https://atlas-trading-clean.onrender.com/register?ref=${referralCode}` : '';
 
   const copyLink = () => {
-    if (referralInfo?.referralLink) {
-      navigator.clipboard.writeText(referralInfo.referralLink);
+    if (referralLink) {
+      navigator.clipboard.writeText(referralLink);
       toast.success('تم نسخ رابط الإحالة');
     }
   };
@@ -27,13 +31,13 @@ export default function Team() {
           <div className="bg-gradient-to-r from-primary/20 to-primary/10 rounded-lg p-6 mb-3 border-2 border-primary/30">
             <div className="text-center">
               <div className="text-xs text-muted-foreground mb-2">رمزك</div>
-              {isLoadingReferral ? (
+              {loading ? (
                 <div className="flex justify-center">
                   <Loader2 className="w-8 h-8 text-primary animate-spin" />
                 </div>
               ) : (
                 <div className="text-5xl font-mono font-bold text-primary tracking-wider">
-                  {referralInfo?.referralCode || '------'}
+                  {referralCode === 'LOADING' ? '------' : referralCode}
                 </div>
               )}
             </div>
@@ -43,13 +47,13 @@ export default function Team() {
           <div className="bg-secondary rounded-lg p-4 mb-3">
             <div className="text-center">
               <div className="text-xs text-muted-foreground mb-1">رابط الدعوة</div>
-              {isLoadingReferral ? (
+              {loading ? (
                 <div className="flex justify-center">
                   <Loader2 className="w-4 h-4 text-primary animate-spin" />
                 </div>
               ) : (
                 <div className="text-xs text-foreground break-all font-mono">
-                  {referralInfo?.referralLink || 'لم يتم إنشاء الرابط'}
+                  {referralLink || 'لم يتم إنشاء الرابط'}
                 </div>
               )}
             </div>
@@ -57,7 +61,7 @@ export default function Team() {
           <div className="grid grid-cols-2 gap-3">
             <button 
               onClick={copyLink} 
-              disabled={isLoadingReferral || !referralInfo?.referralLink}
+              disabled={loading || !referralLink}
               className="flex items-center justify-center gap-2 bg-primary text-primary-foreground rounded-lg py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Copy className="w-4 h-4" />
