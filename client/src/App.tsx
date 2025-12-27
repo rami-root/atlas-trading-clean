@@ -28,8 +28,44 @@ import Deposit from "./pages/Deposit";
 import Withdraw from "./pages/Withdraw";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import { useAuth } from "./contexts/AuthContext";
+import { useEffect } from "react";
+import { useLocation } from "wouter";
 
 function Router() {
+  const { user, loading } = useAuth();
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (loading) return;
+    const path = String(location || '/');
+    const isAuthPage = path === '/login' || path === '/register';
+    if (!user && !isAuthPage) {
+      setLocation('/login');
+      return;
+    }
+    if (path.startsWith('/admin')) {
+      if (!user) {
+        setLocation('/login');
+        return;
+      }
+      if (String((user as any).role) !== 'admin') {
+        setLocation('/');
+      }
+    }
+  }, [loading, location, setLocation, user]);
+
+  if (!loading) {
+    const path = String(location || '/');
+    const isAuthPage = path === '/login' || path === '/register';
+    if (!user && !isAuthPage) {
+      return null;
+    }
+    if (path.startsWith('/admin') && user && String((user as any).role) !== 'admin') {
+      return null;
+    }
+  }
+
   return (
     <Switch>
       <Route path={"/login"} component={Login} />

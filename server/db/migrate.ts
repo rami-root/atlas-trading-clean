@@ -12,10 +12,16 @@ export async function runMigrations() {
         username TEXT NOT NULL UNIQUE,
         email TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('✓ Users table created/verified');
+
+    await db.execute(sql`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user'
+    `);
 
     // Create capital table if it doesn't exist
     await db.execute(sql`

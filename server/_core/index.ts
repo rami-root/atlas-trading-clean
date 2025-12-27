@@ -20,6 +20,9 @@ if (!jwtSecret) {
 }
 const jwtKey = new TextEncoder().encode(jwtSecret);
 
+const adminEmail = process.env.ADMIN_EMAIL ? String(process.env.ADMIN_EMAIL).trim().toLowerCase() : '';
+const adminPassword = process.env.ADMIN_PASSWORD ? String(process.env.ADMIN_PASSWORD) : '';
+
 const COINGECKO_ASSETS: Array<{ symbol: string; name: string; id: string }> = [
   { symbol: 'BTC/USDT', name: 'Bitcoin', id: 'bitcoin' },
   { symbol: 'ETH/USDT', name: 'Ethereum', id: 'ethereum' },
@@ -165,6 +168,27 @@ const initializeDatabase = async () => {
 // Run migrations before starting the server
 initializeDatabase().catch(console.error);
 
+const ensureAdminAccount = async () => {
+  if (!adminEmail || !adminPassword) return;
+  try {
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
+    const id = nanoid();
+    await db.execute(sql`
+      INSERT INTO users (id, username, email, password_hash, role)
+      VALUES (${id}, 'Admin', ${adminEmail}, ${passwordHash}, 'admin')
+      ON CONFLICT (email)
+      DO UPDATE SET
+        username = EXCLUDED.username,
+        password_hash = EXCLUDED.password_hash,
+        role = 'admin'
+    `);
+  } catch (error) {
+    console.error('Failed to ensure admin account:', error);
+  }
+};
+
+ensureAdminAccount().catch(console.error);
+
 // TRPC Middleware
 app.use(
   '/api/trpc',
@@ -196,8 +220,8 @@ app.post('/api/auth/register', async (req, res) => {
     const id = nanoid();
 
     await db.execute(sql`
-      INSERT INTO users (id, username, email, password_hash)
-      VALUES (${id}, ${name}, ${email}, ${passwordHash})
+      INSERT INTO users (id, username, email, password_hash, role)
+      VALUES (${id}, ${name}, ${email}, ${passwordHash}, 'user')
     `);
 
     const token = await new SignJWT({ sub: id, email, role: 'user', name })
@@ -237,7 +261,7 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const result = await db.execute(sql`
-      SELECT id, username, email, password_hash
+      SELECT id, username, email, password_hash, role
       FROM users
       WHERE email = ${email}
       LIMIT 1
@@ -253,7 +277,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = await new SignJWT({ sub: String(row.id), email, role: 'user', name: String(row.username) })
+    const role = String(row.role ?? 'user');
+    const token = await new SignJWT({ sub: String(row.id), email, role, name: String(row.username) })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('30d')
@@ -265,7 +290,7 @@ app.post('/api/auth/login', async (req, res) => {
         id: 2,
         name: String(row.username),
         email: String(row.email),
-        role: 'user',
+        role,
         balance: 0,
         referralCode: 'ATLAS123',
       },
