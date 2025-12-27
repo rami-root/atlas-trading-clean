@@ -258,6 +258,7 @@ const approveDepositRequest = async (requestId: number, adminId: string) => {
       }
     } catch (error) {
       console.error('Error processing referral rewards:', error);
+      // Continue even if referral rewards fail
     }
     
     // Update deposit request status to approved
