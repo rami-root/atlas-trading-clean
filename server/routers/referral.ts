@@ -1,24 +1,38 @@
 import { z } from 'zod';
-import { router, protectedProcedure } from '../trpc';
+import { router, publicProcedure } from '../trpc/trpc';
 import { db } from '../db';
 import { sql } from 'drizzle-orm';
 
 export const referralRouter = router({
   // Get referral info (code and link)
-  info: protectedProcedure.query(async ({ ctx }) => {
-    const user = ctx.user;
-    
-    const baseUrl = process.env.VITE_API_BASE_URL || 'https://atlas-trading-clean.onrender.com';
-    
-    return {
-      referralCode: user.referralCode,
-      referralLink: `${baseUrl}/register?ref=${user.referralCode}`,
-    };
-  }),
+  info: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      const userId = input.userId;
+      
+      // Get user's referral code
+      const userResult = await db.execute(sql`
+        SELECT referral_code FROM users WHERE id = ${userId} LIMIT 1
+      `);
+      const user = Array.isArray(userResult) ? userResult[0] : (userResult as any).rows?.[0];
+      
+      if (!user || !user.referral_code) {
+        throw new Error('User not found or no referral code');
+      }
+      
+      const baseUrl = process.env.VITE_API_BASE_URL || 'https://atlas-trading-clean.onrender.com';
+      
+      return {
+        referralCode: user.referral_code,
+        referralLink: `${baseUrl}/register?ref=${user.referral_code}`,
+      };
+    }),
 
   // Get team statistics
-  team: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.user.id;
+  team: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      const userId = input.userId;
 
     // Get level 1 referrals (direct referrals)
     const level1Result = await db.execute(sql`
@@ -69,8 +83,10 @@ export const referralRouter = router({
   }),
 
   // Get detailed team members
-  members: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.user.id;
+  members: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }) => {
+      const userId = input.userId;
 
     const result = await db.execute(sql`
       SELECT 
