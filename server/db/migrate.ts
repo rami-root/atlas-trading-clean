@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 
 export async function runMigrations() {
   try {
-    console.log('Starting database migrations...');
+    console.log('🔄 Starting database migrations...');
 
     // Create users table if it doesn't exist
     await db.execute(sql`
@@ -133,9 +133,12 @@ export async function runMigrations() {
       ON CONFLICT (id) DO NOTHING
     `);
 
-    console.log('✓ All migrations completed successfully!');
-  } catch (error) {
-    console.error('Migration error:', error);
+    console.log('✅ All migrations completed successfully!');
+    console.log('📊 Database is ready!');
+  } catch (error: any) {
+    console.error('❌ Migration error:', error);
+    console.error('Error details:', error.message);
+    console.error('Stack trace:', error.stack);
     throw error;
   }
 }

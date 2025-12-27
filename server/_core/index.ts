@@ -156,10 +156,14 @@ let migrationsRun = false;
 const initializeDatabase = async () => {
   if (!migrationsRun) {
     try {
+      console.log('🚀 Initializing database...');
       await runMigrations();
       migrationsRun = true;
-    } catch (error) {
-      console.error('Failed to run migrations:', error);
+      console.log('✅ Database initialized successfully!');
+    } catch (error: any) {
+      console.error('❌ Failed to run migrations:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
       // Don't crash the server, just log the error
     }
   }
