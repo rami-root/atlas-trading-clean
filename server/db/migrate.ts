@@ -92,6 +92,22 @@ export async function runMigrations() {
     `);
     console.log('✓ Transactions table created/verified');
 
+    // Create deposit_requests table for pending deposits
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS deposit_requests (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        amount REAL NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        proof_image TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        approved_at TIMESTAMP,
+        approved_by TEXT REFERENCES users(id)
+      )
+    `);
+    console.log('✓ Deposit requests table created/verified');
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS trading_settings (
         id INTEGER PRIMARY KEY,

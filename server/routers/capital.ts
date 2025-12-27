@@ -2,7 +2,7 @@ import { publicProcedure, router } from '../trpc/trpc';
 import { db } from '../db';
 import { capital, transactions } from '../schema';
 import { z } from 'zod';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql } from 'drizzle-orm';
 
 // Define the core logic for capital management
 const calculateCapital = async (userId: string) => {
@@ -122,8 +122,45 @@ const applyTransaction = async (userId: string, type: 'compliant' | 'non_complia
   }
 };
 
-// Add funding to capital
-const addFunding = async (userId: string, amount: number) => {
+// Create deposit request (pending approval)
+const createDepositRequest = async (userId: string, amount: number, proofImage?: string, notes?: string) => {
+  try {
+    const result = await db.execute(sql`
+      INSERT INTO deposit_requests (user_id, amount, status, proof_image, notes)
+      VALUES (${userId}, ${amount}, 'pending', ${proofImage || null}, ${notes || null})
+      RETURNING id
+    `);
+    
+    const requestId = Array.isArray(result) ? result[0]?.id : (result as any).rows?.[0]?.id;
+    
+    return {
+      success: true,
+      message: 'Deposit request created successfully. Waiting for admin approval.',
+      requestId,
+    };
+  } catch (error) {
+    console.error('Error creating deposit request:', error);
+    throw new Error('Failed to create deposit request');
+  }
+};
+
+// Approve deposit request and distribute rewards
+const approveDepositRequest = async (requestId: number, adminId: string) => {
+  try {
+    // Get deposit request
+    const requestResult = await db.execute(sql`
+      SELECT * FROM deposit_requests WHERE id = ${requestId} AND status = 'pending' LIMIT 1
+    `);
+    const request = Array.isArray(requestResult) ? requestResult[0] : (requestResult as any).rows?.[0];
+    
+    if (!request) {
+      throw new Error('Deposit request not found or already processed');
+    }
+    
+    const userId = request.user_id;
+    const amount = request.amount;
+    
+    // Original addFunding logic starts here
   try {
     // Fetch current capital
     const userCapital = await db
@@ -224,14 +261,78 @@ const addFunding = async (userId: string, amount: number) => {
     } catch (error) {
       console.error('Error processing referral rewards:', error);
     }
+    
+    // Update deposit request status to approved
+    await db.execute(sql`
+      UPDATE deposit_requests 
+      SET status = 'approved', approved_at = CURRENT_TIMESTAMP, approved_by = ${adminId}
+      WHERE id = ${requestId}
+    `);
 
     return {
       success: true,
-      message: `Funding of $${amount} added successfully`,
+      message: `Deposit of $${amount} approved and added successfully`,
     };
   } catch (error) {
-    console.error('Error adding funding:', error);
-    throw new Error('Failed to add funding');
+    console.error('Error approving deposit:', error);
+    throw new Error('Failed to approve deposit');
+  }
+};
+
+// Reject deposit request
+const rejectDepositRequest = async (requestId: number, adminId: string, reason?: string) => {
+  try {
+    await db.execute(sql`
+      UPDATE deposit_requests 
+      SET status = 'rejected', approved_at = CURRENT_TIMESTAMP, approved_by = ${adminId}, notes = ${reason || 'Rejected by admin'}
+      WHERE id = ${requestId} AND status = 'pending'
+    `);
+    
+    return {
+      success: true,
+      message: 'Deposit request rejected',
+    };
+  } catch (error) {
+    console.error('Error rejecting deposit:', error);
+    throw new Error('Failed to reject deposit');
+  }
+};
+
+// Get all deposit requests (for admin)
+const getAllDepositRequests = async (status?: string) => {
+  try {
+    let query = sql`
+      SELECT dr.*, u.username, u.email 
+      FROM deposit_requests dr
+      JOIN users u ON dr.user_id = u.id
+    `;
+    
+    if (status) {
+      query = sql`${query} WHERE dr.status = ${status}`;
+    }
+    
+    query = sql`${query} ORDER BY dr.created_at DESC`;
+    
+    const result = await db.execute(query);
+    return Array.isArray(result) ? result : (result as any).rows || [];
+  } catch (error) {
+    console.error('Error fetching deposit requests:', error);
+    throw new Error('Failed to fetch deposit requests');
+  }
+};
+
+// Get user's deposit requests
+const getUserDepositRequests = async (userId: string) => {
+  try {
+    const result = await db.execute(sql`
+      SELECT * FROM deposit_requests 
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+    `);
+    return Array.isArray(result) ? result : (result as any).rows || [];
+  } catch (error) {
+    console.error('Error fetching user deposit requests:', error);
+    throw new Error('Failed to fetch deposit requests');
   }
 };
 
@@ -269,13 +370,50 @@ export const capitalRouter = router({
       return applyTransaction(input.userId, input.type, input.amount);
     }),
 
-  addFunding: publicProcedure
+  createDepositRequest: publicProcedure
     .input(z.object({
-      userId: z.string().default('mock_user_1'),
+      userId: z.string(),
       amount: z.number().positive(),
+      proofImage: z.string().optional(),
+      notes: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
-      return addFunding(input.userId, input.amount);
+      return createDepositRequest(input.userId, input.amount, input.proofImage, input.notes);
+    }),
+
+  approveDepositRequest: publicProcedure
+    .input(z.object({
+      requestId: z.number(),
+      adminId: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      return approveDepositRequest(input.requestId, input.adminId);
+    }),
+
+  rejectDepositRequest: publicProcedure
+    .input(z.object({
+      requestId: z.number(),
+      adminId: z.string(),
+      reason: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      return rejectDepositRequest(input.requestId, input.adminId, input.reason);
+    }),
+
+  getAllDepositRequests: publicProcedure
+    .input(z.object({
+      status: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      return getAllDepositRequests(input.status);
+    }),
+
+  getUserDepositRequests: publicProcedure
+    .input(z.object({
+      userId: z.string(),
+    }))
+    .query(async ({ input }) => {
+      return getUserDepositRequests(input.userId);
     }),
 
   getTransactionHistory: publicProcedure
