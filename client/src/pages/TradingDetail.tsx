@@ -19,6 +19,8 @@ export default function TradingDetail() {
   const [duration, setDuration] = useState<number | null>(null);
   const [amount, setAmount] = useState('');
   const [didAutofill, setDidAutofill] = useState(false);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [liveChange, setLiveChange] = useState<number | null>(null);
   
   // استخدام الراوتر الجديد crypto
   const { data: price, refetch } = trpc.crypto.price.useQuery({ symbol: selectedSymbol });
@@ -86,12 +88,39 @@ export default function TradingDetail() {
     setDidAutofill(true);
   }, [directed, capital, didAutofill, selectedSymbol]);
   
+  // تحديث السعر الأساسي من API كل 30 ثانية
   useEffect(() => {
     const interval = setInterval(() => {
       refetch();
-    }, 10000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [refetch]);
+
+  // تحديث السعر الحقيقي عند تغيير البيانات من API
+  useEffect(() => {
+    if (price?.price) {
+      setLivePrice(price.price);
+      setLiveChange(price.change24h);
+    }
+  }, [price]);
+
+  // إضافة تحركات صغيرة عشوائية للمظهر فقط (كل 3 ثوانٍ)
+  useEffect(() => {
+    if (!price?.price) return;
+    
+    const interval = setInterval(() => {
+      // تغيير عشوائي صغير (+/- 0.1%)
+      const randomChange = (Math.random() - 0.5) * 0.002; // 0.2% max
+      const newPrice = price.price * (1 + randomChange);
+      setLivePrice(newPrice);
+      
+      // تحديث المؤشر أيضاً بشكل طفيف
+      const changeVariation = (Math.random() - 0.5) * 0.1; // +/- 0.05%
+      setLiveChange((price.change24h || 0) + changeVariation);
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, [price]);
 
   const durationOptions = [
     { seconds: 60, profit: 3, label: '60s' },
@@ -150,7 +179,7 @@ export default function TradingDetail() {
         <div className="mb-1">
           <CandlestickChart 
             symbol={selectedSymbol} 
-            currentPrice={price?.price || 0} 
+            currentPrice={livePrice || price?.price || 0} 
           />
         </div>
 
@@ -158,11 +187,11 @@ export default function TradingDetail() {
           <div>
             <div className="text-xs text-muted-foreground">{selectedSymbol}</div>
             <div className="text-xl font-bold text-primary">
-              ${price?.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) || '0.00'}
+              ${(livePrice || price?.price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
             </div>
           </div>
-          <div className={`text-sm font-medium ${(price?.change24h || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {(price?.change24h || 0) >= 0 ? '+' : ''}{price?.change24h.toFixed(2)}%
+          <div className={`text-sm font-medium ${(liveChange || price?.change24h || 0) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+            {(liveChange || price?.change24h || 0) >= 0 ? '+' : ''}{(liveChange || price?.change24h || 0).toFixed(2)}%
           </div>
         </div>
 
