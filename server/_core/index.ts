@@ -305,6 +305,7 @@ app.post('/api/auth/login', async (req, res) => {
         WHERE email = ${email}
         LIMIT 1
       `);
+      console.log('📊 Result structure:', JSON.stringify(result, null, 2));
       console.log('✅ User found:', result.rows?.[0]?.email);
     } catch (e: any) {
       const msg = String(e?.message ?? '').toLowerCase();
