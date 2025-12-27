@@ -605,6 +605,56 @@ app.get('/api/health', (req, res) => {
   res.status(200).send('Server is running');
 });
 
+// Admin endpoint to update referral codes for existing users
+app.post('/api/admin/update-referral-codes', async (req, res) => {
+  try {
+    // Get all users without referral codes or with ATLAS123
+    const usersResult = await db.execute(sql`
+      SELECT id, username, email, referral_code FROM users 
+      WHERE referral_code IS NULL OR referral_code = 'ATLAS123' OR referral_code = ''
+    `);
+    
+    const users = Array.isArray(usersResult) ? usersResult : (usersResult as any).rows || [];
+    
+    console.log(`📊 Found ${users.length} users to update`);
+    
+    const updated = [];
+    
+    for (const user of users) {
+      // Generate unique referral code
+      const referralCode = await generateReferralCode();
+      
+      // Update user with new referral code
+      await db.execute(sql`
+        UPDATE users 
+        SET referral_code = ${referralCode}
+        WHERE id = ${user.id}
+      `);
+      
+      updated.push({
+        username: user.username,
+        email: user.email,
+        oldCode: user.referral_code,
+        newCode: referralCode
+      });
+      
+      console.log(`✅ Updated user ${user.username} (${user.email}) with code: ${referralCode}`);
+    }
+    
+    return res.status(200).json({
+      success: true,
+      message: `Updated ${updated.length} users`,
+      updated
+    });
+  } catch (error) {
+    console.error('❌ Error updating referral codes:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update referral codes'
+    });
+  }
+});
+
 // Serve static files from the client build directory
 // Note: On Vercel, the path might be different, so we use a more robust way
 const distPath = path.join(process.cwd(), 'dist/client');

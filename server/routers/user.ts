@@ -82,9 +82,10 @@ export const userRouter = router({
       username: z.string().min(3),
       email: z.string().email(),
       password: z.string().min(6),
+      referralCode: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
-      const { username, email, password } = input;
+      const { username, email, password, referralCode } = input;
       
       try {
         // Check if user already exists
@@ -100,11 +101,66 @@ export const userRouter = router({
         const passwordHash = await bcrypt.hash(password, 10);
         const id = nanoid();
         
-        // Insert new user
+        // Generate unique referral code for new user
+        const userReferralCode = `ATLAS${nanoid(6).toUpperCase()}`;
+        
+        // Insert new user with referral code
         await db.execute(sql`
-          INSERT INTO users (id, username, email, password_hash, role)
-          VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user')
+          INSERT INTO users (id, username, email, password_hash, role, referral_code)
+          VALUES (${id}, ${username}, ${email}, ${passwordHash}, 'user', ${userReferralCode})
         `);
+        
+        // If user registered with a referral code, create referral relationships
+        if (referralCode && referralCode !== 'ATLAS123') {
+          try {
+            // Find the referrer by referral code
+            const referrerResult = await db.execute(sql`
+              SELECT id FROM users WHERE referral_code = ${referralCode}
+            `);
+            
+            if (referrerResult.rows.length > 0) {
+              const referrerId = (referrerResult.rows[0] as any).id;
+              
+              // Create Level 1 relationship (direct referral)
+              await db.execute(sql`
+                INSERT INTO referrals (referrer_id, referred_id, level)
+                VALUES (${referrerId}, ${id}, 1)
+              `);
+              
+              // Find Level 2 referrer (referrer's referrer)
+              const level2Result = await db.execute(sql`
+                SELECT referrer_id FROM referrals 
+                WHERE referred_id = ${referrerId} AND level = 1
+              `);
+              
+              if (level2Result.rows.length > 0) {
+                const level2ReferrerId = (level2Result.rows[0] as any).referrer_id;
+                await db.execute(sql`
+                  INSERT INTO referrals (referrer_id, referred_id, level)
+                  VALUES (${level2ReferrerId}, ${id}, 2)
+                `);
+                
+                // Find Level 3 referrer (level 2's referrer)
+                const level3Result = await db.execute(sql`
+                  SELECT referrer_id FROM referrals 
+                  WHERE referred_id = ${level2ReferrerId} AND level = 1
+                `);
+                
+                if (level3Result.rows.length > 0) {
+                  const level3ReferrerId = (level3Result.rows[0] as any).referrer_id;
+                  await db.execute(sql`
+                    INSERT INTO referrals (referrer_id, referred_id, level)
+                    VALUES (${level3ReferrerId}, ${id}, 3)
+                  `);
+                }
+              }
+              
+              console.log(`✅ Referral relationships created for user ${id} with referrer ${referrerId}`);
+            }
+          } catch (refError) {
+            console.error('Error creating referral relationships:', refError);
+          }
+        }
         
         // Generate JWT token
         const token = await new SignJWT({ 
