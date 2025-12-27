@@ -160,8 +160,6 @@ const approveDepositRequest = async (requestId: number, adminId: string) => {
     const userId = request.user_id;
     const amount = request.amount;
     
-    // Original addFunding logic starts here
-  try {
     // Fetch current capital
     const userCapital = await db
       .select()
