@@ -20,6 +20,33 @@ if (!jwtSecret) {
 }
 const jwtKey = new TextEncoder().encode(jwtSecret);
 
+const COINGECKO_ASSETS: Array<{ symbol: string; name: string; id: string }> = [
+  { symbol: 'BTC/USDT', name: 'Bitcoin', id: 'bitcoin' },
+  { symbol: 'ETH/USDT', name: 'Ethereum', id: 'ethereum' },
+  { symbol: 'USDT/USDT', name: 'Tether', id: 'tether' },
+  { symbol: 'BNB/USDT', name: 'BNB', id: 'binancecoin' },
+  { symbol: 'XRP/USDT', name: 'XRP', id: 'ripple' },
+  { symbol: 'ADA/USDT', name: 'Cardano', id: 'cardano' },
+  { symbol: 'SOL/USDT', name: 'Solana', id: 'solana' },
+  { symbol: 'DOGE/USDT', name: 'Dogecoin', id: 'dogecoin' },
+  { symbol: 'TRX/USDT', name: 'TRON', id: 'tron' },
+  { symbol: 'TON/USDT', name: 'Toncoin', id: 'the-open-network' },
+  { symbol: 'LTC/USDT', name: 'Litecoin', id: 'litecoin' },
+  { symbol: 'BCH/USDT', name: 'Bitcoin Cash', id: 'bitcoin-cash' },
+  { symbol: 'DOT/USDT', name: 'Polkadot', id: 'polkadot' },
+  { symbol: 'MATIC/USDT', name: 'Polygon', id: 'polygon' },
+  { symbol: 'AVAX/USDT', name: 'Avalanche', id: 'avalanche-2' },
+  { symbol: 'SHIB/USDT', name: 'Shiba Inu', id: 'shiba-inu' },
+  { symbol: 'LINK/USDT', name: 'Chainlink', id: 'chainlink' },
+  { symbol: 'UNI/USDT', name: 'Uniswap', id: 'uniswap' },
+  { symbol: 'ATOM/USDT', name: 'Cosmos', id: 'cosmos' },
+  { symbol: 'XLM/USDT', name: 'Stellar', id: 'stellar' },
+];
+
+let pricesCache: any[] | null = null;
+let pricesCacheAt = 0;
+const PRICES_TTL_MS = 15000;
+
 type TradingSettings = {
   allowedSymbol: string;
   allowedDuration: number;
@@ -274,6 +301,39 @@ app.get('/api/auth/me', async (req, res) => {
     });
   } catch {
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+});
+
+app.get('/api/prices', async (req, res) => {
+  try {
+    if (pricesCache && Date.now() - pricesCacheAt < PRICES_TTL_MS) {
+      return res.status(200).json({ prices: pricesCache, cached: true });
+    }
+
+    const ids = COINGECKO_ASSETS.map((a) => a.id).join(',');
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd&include_24hr_change=true`;
+    const r = await fetch(url, { method: 'GET' });
+    if (!r.ok) {
+      return res.status(502).json({ error: 'Price fetch failed' });
+    }
+    const json = await r.json();
+    const rows = COINGECKO_ASSETS.map((a) => {
+      const item = (json as any)?.[a.id];
+      const price = Number(item?.usd ?? 0);
+      const change24h = Number(item?.usd_24h_change ?? 0);
+      return {
+        symbol: a.symbol,
+        name: a.name,
+        price,
+        change24h,
+      };
+    });
+
+    pricesCache = rows;
+    pricesCacheAt = Date.now();
+    return res.status(200).json({ prices: rows, cached: false });
+  } catch {
+    return res.status(500).json({ error: 'Price fetch failed' });
   }
 });
 

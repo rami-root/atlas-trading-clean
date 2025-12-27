@@ -163,6 +163,15 @@ const COINGECKO_ASSETS: Array<{ symbol: string; name: string; id: string }> = [
 ];
 
 const fetchCoinGeckoPrices = async () => {
+  if (!import.meta.env.DEV) {
+    const res = await fetch('/api/prices', { method: 'GET' });
+    if (!res.ok) throw new Error('Price fetch failed');
+    const payload = await res.json();
+    const rows = Array.isArray(payload?.prices) ? payload.prices : null;
+    if (!rows) throw new Error('Price fetch failed');
+    return rows;
+  }
+
   const ids = COINGECKO_ASSETS.map((a) => a.id).join(',');
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=usd&include_24hr_change=true`;
   const res = await fetch(url, { method: 'GET' });
