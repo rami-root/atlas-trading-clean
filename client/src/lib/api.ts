@@ -54,9 +54,12 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    if (!import.meta.env.DEV) {
-      return config;
-    }
+    // Disable mock adapter - always use real API
+    return config;
+    
+    // if (!import.meta.env.DEV) {
+    //   return config;
+    // }
 
     const url = String(config.url ?? '');
     if (url === '/api/auth/login') {
