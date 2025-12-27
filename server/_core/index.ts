@@ -89,7 +89,7 @@ const readTradingSettings = async (): Promise<TradingSettings> => {
       LIMIT 1
     `);
 
-    const row = (result as unknown as { rows?: any[] }).rows?.[0];
+    const row = Array.isArray(result) ? result[0] : (result as unknown as { rows?: any[] }).rows?.[0];
     if (!row) return defaultTradingSettings;
 
     return {
@@ -306,7 +306,7 @@ app.post('/api/auth/login', async (req, res) => {
         LIMIT 1
       `);
       console.log('📊 Result structure:', JSON.stringify(result, null, 2));
-      console.log('✅ User found:', result.rows?.[0]?.email);
+      console.log('✅ User found:', result[0]?.email);
     } catch (e: any) {
       const msg = String(e?.message ?? '').toLowerCase();
       if (msg.includes('column') && msg.includes('role')) {
@@ -321,7 +321,7 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
 
-    const row = (result as unknown as { rows?: any[] }).rows?.[0];
+    const row = Array.isArray(result) ? result[0] : (result as unknown as { rows?: any[] }).rows?.[0];
     if (!row) {
       console.log('❌ User not found in database');
       return res.status(401).json({ error: 'Invalid credentials' });
