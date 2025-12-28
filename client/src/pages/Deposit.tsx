@@ -30,7 +30,7 @@ export default function Deposit() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token');
       if (!token) {
         toast.error('الرجاء تسجيل الدخول أولاً');
         setLocation('/login');
